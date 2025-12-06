@@ -20,7 +20,7 @@ from qcow2rootfs import qcow2rootfs
 def iso2rootfs(iso_path, output_dir, preseed_file=None, ks_file=None,
                disk_size='20G', memory=2048, vcpus=2, timeout=3600,
                kernel_output=None, create_cgz=True, keep_qcow2=False,
-               distribution=None):
+               distribution=None, http_port=8080):
     """
     将ISO转换为rootfs
     
@@ -62,7 +62,8 @@ def iso2rootfs(iso_path, output_dir, preseed_file=None, ks_file=None,
             memory=memory,
             vcpus=vcpus,
             timeout=timeout,
-            distribution=distribution
+            distribution=distribution,
+            http_port=http_port
         )
         
         # 步骤2: QCOW2转rootfs
@@ -139,6 +140,7 @@ def main():
     parser.add_argument('--kernel', help='Kernel输出路径（默认: output_dir/kernel）')
     parser.add_argument('--no-cgz', action='store_true', help='不创建cgz压缩包')
     parser.add_argument('--keep-qcow2', action='store_true', help='保留中间QCOW2文件')
+    parser.add_argument('--http-port', type=int, default=8080, help='HTTP服务器端口（默认: 8080）')
     
     args = parser.parse_args()
     
@@ -155,7 +157,8 @@ def main():
             kernel_output=args.kernel,
             create_cgz=not args.no_cgz,
             keep_qcow2=args.keep_qcow2,
-            distribution=args.distribution
+            distribution=args.distribution,
+            http_port=args.http_port
         )
     except KeyboardInterrupt:
         print("\n\n用户中断", file=sys.stderr)

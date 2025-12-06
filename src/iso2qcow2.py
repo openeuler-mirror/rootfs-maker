@@ -16,7 +16,7 @@ import re
 
 # 添加lib目录到路径
 sys.path.insert(0, str(Path(__file__).parent))
-from lib.http_server import get_host_ip, start_http_server
+from lib.http_server import get_host_ip, start_http_server, check_firewall_status, check_http_server_accessible
 from lib.deb_expect import auto_install_grub as deb_auto_install_grub
 from lib.rpm_expect import auto_install_grub as rpm_auto_install_grub
 
@@ -229,7 +229,7 @@ def generate_from_template(output_path, distribution, iso_type):
 
 def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
               disk_size='20G', memory=2048, vcpus=2, timeout=3600,
-              vm_name=None, distribution=None):
+              vm_name=None, distribution=None, http_port=8080):
     """
     将ISO转换为QCOW2镜像
     
@@ -277,8 +277,92 @@ def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
     # 创建临时目录用于HTTP服务器
     temp_dir = tempfile.mkdtemp(prefix='iso2qcow2_')
     http_server = None
-    
+
+    def ensure_vm_stopped(vm_name, max_retries=5, shutdown_timeout=30):
+        """
+        确保虚拟机已停止，先尝试优雅关机，失败后强制销毁。
+        返回True如果虚拟机已停止或不存在，否则返回False。
+        """
+        
+        for attempt in range(max_retries):
+            # 检查虚拟机状态
+            try:
+                result = subprocess.run(
+                    ['virsh', 'domstate', vm_name],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                state = result.stdout.strip()
+            except subprocess.TimeoutExpired:
+                print(f"检查虚拟机状态超时，尝试关闭...")
+                state = 'unknown'
+            except Exception as e:
+                # 虚拟机可能不存在（已销毁或未定义）
+                print(f"无法获取虚拟机状态（可能不存在）: {e}")
+                return True  # 视为已停止
+            
+            if state in ('shut off', 'shutdown', 'in shutdown'):
+                print(f"虚拟机 {vm_name} 已停止")
+                return True
+            elif state in ('running', 'idle', 'paused', 'blocked'):
+                if attempt == 0:
+                    print(f"虚拟机 {vm_name} 状态为 {state}，尝试优雅关机...")
+                    subprocess.run(['virsh', 'shutdown', vm_name], check=False)
+                else:
+                    print(f"虚拟机 {vm_name} 状态仍为 {state}，等待 {shutdown_timeout} 秒...")
+                
+                # 等待关机
+                wait_start = time.time()
+                while time.time() - wait_start < shutdown_timeout:
+                    time.sleep(2)
+                    try:
+                        result = subprocess.run(
+                            ['virsh', 'domstate', vm_name],
+                            capture_output=True,
+                            text=True,
+                            timeout=5
+                        )
+                        if 'shut off' in result.stdout:
+                            print(f"虚拟机 {vm_name} 已优雅关机")
+                            return True
+                    except Exception:
+                        pass
+                
+                # 超时后强制销毁
+                print(f"优雅关机超时，尝试强制销毁...")
+                subprocess.run(['virsh', 'destroy', vm_name], check=False)
+                # 继续循环，下一次迭代将检查状态
+            else:
+                # 其他状态（如 'crashed', 'pmsuspended'）也尝试销毁
+                print(f"虚拟机 {vm_name} 状态为 {state}，尝试强制销毁...")
+                subprocess.run(['virsh', 'destroy', vm_name], check=False)
+        
+        # 最终检查
+        try:
+            result = subprocess.run(
+                ['virsh', 'domstate', vm_name],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if 'shut off' in result.stdout:
+                print(f"虚拟机 {vm_name} 最终已停止")
+
+            vm_file = "/var/lib/libvirt/qemu/nvram/"+ vm_name +"_VARS.fd"
+            if os.path.exists(vm_file):
+                os.remove(vm_file)
+                print(f"成功删除文件：{vm_file}")
+            subprocess.run(['virsh', 'undefine', vm_name, '--nvram'], check=False, capture_output=True)
+            return True
+        except Exception:
+            pass
+        
+        print(f"警告: 无法确保虚拟机 {vm_name} 停止")
+        return False
+
     try:
+
         # 设置配置文件
         if iso_type == 'deb':
             if preseed_file:
@@ -292,7 +376,7 @@ def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
                 else:
                     print(f"使用模板: templates/{distribution}/preseed.cfg")
                 generate_from_template(Path(temp_dir) / 'preseed.cfg', distribution, 'deb')
-            config_url = f"http://{get_host_ip()}:8080/preseed.cfg"
+            config_url = f"http://{get_host_ip()}:{http_port}/preseed.cfg"
         else:  # rpm
             if ks_file:
                 # 保持原始文件名，但如果是.ks结尾则直接使用
@@ -301,7 +385,7 @@ def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
                     ks_filename = 'ks.ks'
                 shutil.copy(ks_file, Path(temp_dir) / ks_filename)
                 print(f"使用提供的kickstart文件: {ks_file}")
-                config_url = f"http://{get_host_ip()}:8080/{ks_filename}"
+                config_url = f"http://{get_host_ip()}:{http_port}/{ks_filename}"
             else:
                 # 如果没有指定发行版，尝试使用centos作为默认
                 if distribution is None:
@@ -310,11 +394,27 @@ def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
                 else:
                     print(f"使用模板: templates/{distribution}/ks.ks")
                 generate_from_template(Path(temp_dir) / 'ks.ks', distribution, 'rpm')
-                config_url = f"http://{get_host_ip()}:8080/ks.ks"
+                config_url = f"http://{get_host_ip()}:{http_port}/ks.ks"
         
         # 启动HTTP服务器
-        print(f"启动HTTP服务器在端口8080...")
-        http_server, http_thread = start_http_server(temp_dir, port=8080)
+        print(f"启动HTTP服务器在端口{http_port}...")
+        http_server, http_thread = start_http_server(temp_dir, port=http_port)
+        
+        # 验证HTTP服务器可访问性
+        host_ip = get_host_ip()
+        config_filename = 'preseed.cfg' if iso_type == 'deb' else 'ks.ks'
+        
+        # 检查防火墙状态
+        check_firewall_status(http_port)
+        
+        if not check_http_server_accessible(host_ip, http_port, config_filename):
+            print(f"警告: HTTP服务器可能无法从虚拟机访问")
+            print(f"请确保防火墙允许端口{http_port}，或使用以下命令临时开放端口:")
+            print(f"  sudo firewall-cmd --add-port={http_port}/tcp --permanent && sudo firewall-cmd --reload  # firewalld")
+            print(f"  sudo ufw allow {http_port}/tcp               # ufw")
+            print(f"  sudo iptables -A INPUT -p tcp --dport {http_port} -j ACCEPT  # iptables")
+            print(f"或者尝试使用不同的端口: --http-port 参数")
+        
         print(f"配置文件URL: {config_url}")
         
         # 检测是否为DVD ISO
@@ -331,10 +431,25 @@ def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
             '--ram', str(memory),
             '--vcpus', str(vcpus),
             '--disk', f'path={output_qcow2},size={disk_size},format=qcow2',
-            '--network', 'network=default',
+            '--network', 'network=default,model=virtio',
             '--graphics', 'none',
             '--console', 'pty,target_type=serial',
         ]
+        
+        # 检查默认网络是否运行
+        try:
+            result = subprocess.run(
+                ['virsh', 'net-info', 'default'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode != 0:
+                print("警告: 默认网络可能未运行，尝试启动...")
+                subprocess.run(['virsh', 'net-start', 'default'], check=False)
+                subprocess.run(['virsh', 'net-autostart', 'default'], check=False)
+        except Exception as e:
+            print(f"网络检查失败: {e}")
         
         # DVD ISO使用--cdrom，netinst使用--location
         if is_dvd:
@@ -363,7 +478,7 @@ def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
         # 如果是DVD ISO，需要等待虚拟机启动后使用expect配置GRUB
         if is_dvd:
             print("\n等待虚拟机启动...")
-            time.sleep(10)  # 等待虚拟机启动
+            time.sleep(2)  # 等待虚拟机启动
             
             # 等待虚拟机进入运行状态
             max_wait = 60
@@ -435,6 +550,12 @@ def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
         subprocess.run(['virsh', 'undefine', vm_name], check=False)
         
     finally:
+        # 确保虚拟机已停止
+        try:
+            ensure_vm_stopped(vm_name)
+        except Exception as e:
+            print(f"警告: 虚拟机关闭过程中出现错误: {e}")
+        
         # 停止HTTP服务器
         if http_server:
             http_server.shutdown()
@@ -458,6 +579,7 @@ def main():
     parser.add_argument('-c', '--vcpus', type=int, default=2, help='CPU核心数（默认: 2）')
     parser.add_argument('-t', '--timeout', type=int, default=3600, help='安装超时时间秒（默认: 3600）')
     parser.add_argument('-n', '--vm-name', help='虚拟机名称（默认: 自动生成）')
+    parser.add_argument('--http-port', type=int, default=8080, help='HTTP服务器端口（默认: 8080）')
     
     args = parser.parse_args()
     
@@ -472,7 +594,8 @@ def main():
             vcpus=args.vcpus,
             timeout=args.timeout,
             vm_name=args.vm_name,
-            distribution=args.distribution
+            distribution=args.distribution,
+            http_port=args.http_port
         )
         print(f"成功创建QCOW2镜像: {args.output}")
     except Exception as e:
