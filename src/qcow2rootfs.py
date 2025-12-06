@@ -227,6 +227,23 @@ def extract_kernel_and_rootfs(qcow2_path, output_dir, kernel_output=None):
                     except Exception:
                         pass
             
+            # 注释掉fstab中未注释的行（防止启动时挂载）
+            fstab_path = rootfs_output / 'etc' / 'fstab'
+            if fstab_path.exists():
+                print(f"注释fstab: {fstab_path}")
+                try:
+                    subprocess.run(
+                        ['sed', '-i', r's/^\([^#]\)/# \1/g', str(fstab_path)],
+                        cwd=str(rootfs_output),
+                        check=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE
+                    )
+                    print("✓ fstab已注释")
+                except subprocess.CalledProcessError as e:
+                    print(f"警告: 注释fstab失败: {e}")
+            else:
+                print(f"提示: fstab文件不存在: {fstab_path}")
             # 提取kernel文件
             if kernels:
                 main_kernel = sorted(kernels, key=lambda x: x.stat().st_mtime, reverse=True)[0]
