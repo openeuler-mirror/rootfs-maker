@@ -40,6 +40,22 @@ def install_uv():
         return False
 
 
+def is_openeuler():
+    """检测当前系统是否为openEuler"""
+    try:
+        with open('/etc/os-release', 'r') as f:
+            content = f.read()
+        import re
+        # 检查ID或NAME字段是否包含openeuler（不区分大小写）
+        if re.search(r'ID\s*=\s*["\']?openeuler["\']?', content, re.IGNORECASE):
+            return True
+        if re.search(r'NAME\s*=\s*["\']?openEuler["\']?', content, re.IGNORECASE):
+            return True
+    except FileNotFoundError:
+        pass
+    return False
+
+
 def check_system_dependencies():
     """检查系统依赖"""
     dependencies = {
@@ -51,6 +67,13 @@ def check_system_dependencies():
         'mount': 'util-linux',
     }
     
+    # 如果是openEuler，调整包名
+    if is_openeuler():
+        dependencies['qemu-nbd'] = 'qemu'  # openEuler中qemu-nbd在qemu包中
+        extra_packages = ['edk2','virt-install']  # 额外需要edk2包
+    else:
+        extra_packages = []
+    
     missing = []
     for cmd, package in dependencies.items():
         try:
@@ -59,6 +82,17 @@ def check_system_dependencies():
         except subprocess.CalledProcessError:
             print(f"✗ {cmd} 未安装 (需要安装 {package})")
             missing.append((cmd, package))
+    
+    # 检查额外包（仅openEuler）
+    if is_openeuler():
+        for pkg in extra_packages:
+            # 使用rpm检查包是否安装
+            try:
+                subprocess.run(['rpm', '-q', pkg], capture_output=True, check=True)
+                print(f"✓ 包 {pkg} 已安装")
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                print(f"✗ 包 {pkg} 未安装 (需要安装 {pkg})")
+                missing.append((pkg, pkg))  # 包名作为命令占位
     
     return missing
 
