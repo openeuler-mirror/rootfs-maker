@@ -433,6 +433,7 @@ def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
             '--disk', f'path={output_qcow2},size={disk_size},format=qcow2',
             '--network', 'network=default,model=virtio',
             '--graphics', 'none',
+            '--osinfo', 'detect=on,require=off',
             '--console', 'pty,target_type=serial',
         ]
         
