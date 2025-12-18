@@ -266,7 +266,7 @@ def extract_kernel_and_rootfs(qcow2_path, output_dir, kernel_output=None):
             temp_tar.unlink()
 
 
-def qcow2rootfs(qcow2_path, output_dir, kernel_output=None, create_cgz=True):
+def qcow2rootfs(qcow2_path, output_dir, kernel_output=None, create_cgz=True, modules_output=None):
     """
     将QCOW2转换为rootfs（提取kernel，打包为cgz）
     
@@ -275,6 +275,7 @@ def qcow2rootfs(qcow2_path, output_dir, kernel_output=None, create_cgz=True):
         output_dir: 输出目录
         kernel_output: kernel输出路径
         create_cgz: 是否创建cgz压缩包
+        modules_output: 内核模块输出文件路径（可选）
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -291,10 +292,30 @@ def qcow2rootfs(qcow2_path, output_dir, kernel_output=None, create_cgz=True):
         compress_cgz(str(rootfs_dir), str(cgz_output))
         print(f"Rootfs已打包为: {cgz_output}")
     
+    # 打包内核模块
+    modules_cgz = None
+    if modules_output is not None:
+        print(f"打包内核模块到: {modules_output}")
+        # 查找lib/modules目录
+        modules_dir = rootfs_dir / 'lib' / 'modules'
+        if not modules_dir.exists():
+            raise FileNotFoundError(f"模块目录不存在: {modules_dir}")
+        # 获取所有子目录（内核版本）
+        subdirs = [d for d in modules_dir.iterdir() if d.is_dir()]
+        if not subdirs:
+            raise FileNotFoundError(f"模块目录下未找到内核版本子目录: {modules_dir}")
+        # 选择最新的子目录（按名称降序排序）
+        selected = sorted(subdirs, key=lambda d: d.name, reverse=True)[0]
+        print(f"选择内核模块版本: {selected.name}")
+        # 使用compress_cgz压缩
+        compress_cgz(str(selected), modules_output)
+        modules_cgz = modules_output
+    
     return {
         'kernel': kernel_output or (output_dir / 'kernel'),
         'rootfs_dir': rootfs_dir,
-        'rootfs_cgz': cgz_output if create_cgz else None
+        'rootfs_cgz': cgz_output if create_cgz else None,
+        'modules_cgz': modules_cgz
     }
 
 
@@ -304,6 +325,7 @@ def main():
     parser.add_argument('-o', '--output', required=True, help='输出目录')
     parser.add_argument('-k', '--kernel', help='Kernel输出路径（默认: output_dir/kernel）')
     parser.add_argument('--no-cgz', action='store_true', help='不创建cgz压缩包')
+    parser.add_argument('--modules', help='内核模块输出文件路径（可选）')
     
     args = parser.parse_args()
     
@@ -312,7 +334,8 @@ def main():
             args.input,
             args.output,
             kernel_output=args.kernel,
-            create_cgz=not args.no_cgz
+            create_cgz=not args.no_cgz,
+            modules_output=args.modules
         )
         
         print("\n转换完成!")
@@ -320,6 +343,8 @@ def main():
         print(f"Rootfs目录: {result['rootfs_dir']}")
         if result['rootfs_cgz']:
             print(f"Rootfs压缩包: {result['rootfs_cgz']}")
+        if result['modules_cgz']:
+            print(f"内核模块压缩包: {result['modules_cgz']}")
     
     except Exception as e:
         print(f"错误: {e}", file=sys.stderr)
