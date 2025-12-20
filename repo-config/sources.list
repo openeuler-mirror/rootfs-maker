@@ -1,0 +1,3 @@
+deb http://mirrors.huaweicloud.com/debian/ bookworm main
+deb http://mirrors.huaweicloud.com/debian/ bookworm-updates main
+deb http://mirrors.huaweicloud.com/debian-security/ bookworm-security main

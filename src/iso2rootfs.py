@@ -20,7 +20,8 @@ from qcow2rootfs import qcow2rootfs
 def iso2rootfs(iso_path, output_dir, preseed_file=None, ks_file=None,
                disk_size='20G', memory=2048, vcpus=2, timeout=3600,
                kernel_output=None, create_cgz=True, keep_qcow2=False,
-               distribution=None, http_port=8080, modules_output=None):
+               distribution=None, http_port=8080, modules_output=None,
+               repo_url=None):
     """
     将ISO转换为rootfs
     
@@ -38,6 +39,7 @@ def iso2rootfs(iso_path, output_dir, preseed_file=None, ks_file=None,
         keep_qcow2: 是否保留中间QCOW2文件
         distribution: 发行版名称（用于自动选择模板）
         modules_output: 内核模块输出文件路径（可选）
+        repo_url: 仓库镜像链接，如果提供则更新repo-config/sources.list并复制到rootfs
     """
     iso_path = Path(iso_path).resolve()
     if not iso_path.exists():
@@ -76,7 +78,9 @@ def iso2rootfs(iso_path, output_dir, preseed_file=None, ks_file=None,
             str(output_dir),
             kernel_output=kernel_output,
             create_cgz=create_cgz,
-            modules_output=modules_output
+            modules_output=modules_output,
+            repo_url=repo_url,
+            distribution=distribution
         )
         
         # 清理临时QCOW2文件（如果不需要保留）
@@ -96,6 +100,8 @@ def iso2rootfs(iso_path, output_dir, preseed_file=None, ks_file=None,
             print(f"Rootfs压缩包: {result['rootfs_cgz']}")
         if result.get('modules_cgz'):
             print(f"内核模块压缩包: {result['modules_cgz']}")
+        if result.get('repo_updated'):
+            print(f"✓ 仓库镜像已更新")
         
         return result
     
@@ -146,6 +152,7 @@ def main():
     parser.add_argument('--keep-qcow2', action='store_true', help='保留中间QCOW2文件')
     parser.add_argument('--modules', help='内核模块输出文件路径（可选）')
     parser.add_argument('--http-port', type=int, default=8080, help='HTTP服务器端口（默认: 8080）')
+    parser.add_argument('--repo', help='仓库镜像链接，将替换repo-config/sources.list中的镜像地址并复制到rootfs的/etc/apt/目录下')
     
     args = parser.parse_args()
     
@@ -164,7 +171,8 @@ def main():
             keep_qcow2=args.keep_qcow2,
             distribution=args.distribution,
             http_port=args.http_port,
-            modules_output=args.modules
+            modules_output=args.modules,
+            repo_url=args.repo
         )
     except KeyboardInterrupt:
         print("\n\n用户中断", file=sys.stderr)

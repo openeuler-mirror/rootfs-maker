@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 import shutil
 import argparse
+import re
 from pathlib import Path
 
 # 添加lib目录到路径
@@ -266,7 +267,109 @@ def extract_kernel_and_rootfs(qcow2_path, output_dir, kernel_output=None):
             temp_tar.unlink()
 
 
-def qcow2rootfs(qcow2_path, output_dir, kernel_output=None, create_cgz=True, modules_output=None):
+def update_repo_config(repo_url, distribution=None):
+    """
+    更新repo-config中的仓库配置文件中的镜像链接
+    
+    Args:
+        repo_url: 新的仓库镜像链接（只包含主机名和路径第一段，例如：http://new-mirror.example.com/debian）
+        distribution: 发行版名称（debian/openeuler），用于确定使用哪个配置文件
+        
+    Returns:
+        修改后的配置文件内容字符串
+    """
+    # 根据发行版确定配置文件和链接匹配模式
+    if distribution == 'openeuler':
+        config_file = 'openEuler.repo'
+        pattern = r'(https?://[^/\s]+/[^/\s]+)'
+    else:
+        # 默认为debian/ubuntu等使用APT的发行版
+        config_file = 'sources.list'
+        pattern = r'(https?://[^/\s]+)'
+    
+    repo_config_path = Path('repo-config') / config_file
+    if not repo_config_path.exists():
+        raise FileNotFoundError(f"repo-config/{config_file}文件不存在: {repo_config_path}")
+    
+    print(f"更新仓库镜像链接: {repo_url} (发行版: {distribution or 'debian'})")
+    
+    try:
+        # 读取原始文件内容
+        with open(repo_config_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # 找到所有匹配的链接
+        matches = re.findall(pattern, content)
+        if matches:
+            # 去重
+            unique_matches = list(set(matches))
+            print(f"找到镜像链接: {unique_matches}")
+            
+            # 用repo_url替换所有找到的链接
+            new_content = content
+            for old_url in unique_matches:
+                # 只替换主机名和路径第一段
+                # 例如：将 http://123.60.114.16:8000/mirrors.huaweicloud.com/debian 替换为 repo_url
+                # 或者将 http://repo.openeuler.org/openEuler-20.03-LTS 替换为 repo_url
+                new_content = new_content.replace(old_url, repo_url)
+                print(f"替换链接: {old_url} -> {repo_url}")
+            
+            # 写回文件
+            with open(repo_config_path, 'w', encoding='utf-8') as f:
+                f.write(new_content)
+            print(f"✓ repo-config/{config_file}已更新")
+            
+            return new_content
+        else:
+            print("警告: 未找到镜像链接，使用默认内容")
+            return content
+            
+    except Exception as e:
+        print(f"警告: 更新repo-config失败: {e}")
+        # 尝试读取原始内容作为回退
+        try:
+            with open(repo_config_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        except:
+            return None
+
+
+def copy_repo_config_to_rootfs(rootfs_dir, distribution=None):
+    """
+    将repo-config中的仓库配置文件复制到rootfs的相应目录下
+    
+    Args:
+        rootfs_dir: rootfs目录路径
+        distribution: 发行版名称（debian/openeuler），用于确定使用哪个配置文件和目标路径
+    """
+    # 根据发行版确定配置文件和目标路径
+    if distribution == 'openeuler':
+        config_file = 'openEuler.repo'
+        # OpenEuler的repo文件复制到/etc/yum.repos.d/目录下
+        target_path = Path(rootfs_dir) / 'etc' / 'yum.repos.d' / 'openEuler.repo'
+    else:
+        # 默认为debian/ubuntu等使用APT的发行版
+        config_file = 'sources.list'
+        # Debian/Ubuntu的sources.list复制到/etc/apt/目录下
+        target_path = Path(rootfs_dir) / 'etc' / 'apt' / 'sources.list'
+    
+    repo_config_path = Path('repo-config') / config_file
+    if not repo_config_path.exists():
+        raise FileNotFoundError(f"repo-config/{config_file}文件不存在: {repo_config_path}")
+    
+    # 确保目标目录存在
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    print(f"复制仓库配置到rootfs: {target_path} (发行版: {distribution or 'debian'})")
+    
+    try:
+        shutil.copy2(repo_config_path, target_path)
+        print(f"✓ 仓库配置已复制到rootfs")
+    except Exception as e:
+        print(f"警告: 复制仓库配置失败: {e}")
+
+
+def qcow2rootfs(qcow2_path, output_dir, kernel_output=None, create_cgz=True, modules_output=None, repo_url=None, distribution=None):
     """
     将QCOW2转换为rootfs（提取kernel，打包为cgz）
     
@@ -276,6 +379,8 @@ def qcow2rootfs(qcow2_path, output_dir, kernel_output=None, create_cgz=True, mod
         kernel_output: kernel输出路径
         create_cgz: 是否创建cgz压缩包
         modules_output: 内核模块输出文件路径（可选）
+        repo_url: 仓库镜像链接，如果提供则更新repo-config中的配置文件并复制到rootfs
+        distribution: 发行版名称（debian/openeuler），用于确定使用哪个配置文件和目标路径
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -285,6 +390,19 @@ def qcow2rootfs(qcow2_path, output_dir, kernel_output=None, create_cgz=True, mod
     
     # 提取kernel和rootfs
     extract_kernel_and_rootfs(qcow2_path, output_dir, kernel_output)
+    
+    # 更新仓库配置并复制到rootfs（如果提供了链接）
+    repo_updated = False
+    if repo_url is not None:
+        print(f"处理仓库镜像链接: {repo_url} (发行版: {distribution or 'debian'})")
+        try:
+            # 更新repo-config中的配置文件链接
+            update_repo_config(repo_url, distribution)
+            # 复制到rootfs
+            copy_repo_config_to_rootfs(rootfs_dir, distribution)
+            repo_updated = True
+        except Exception as e:
+            print(f"警告: 更新仓库配置失败: {e}")
     
     # 打包为cgz
     if create_cgz:
@@ -315,7 +433,8 @@ def qcow2rootfs(qcow2_path, output_dir, kernel_output=None, create_cgz=True, mod
         'kernel': kernel_output or (output_dir / 'kernel'),
         'rootfs_dir': rootfs_dir,
         'rootfs_cgz': cgz_output if create_cgz else None,
-        'modules_cgz': modules_cgz
+        'modules_cgz': modules_cgz,
+        'repo_updated': repo_updated
     }
 
 
@@ -326,8 +445,16 @@ def main():
     parser.add_argument('-k', '--kernel', help='Kernel输出路径（默认: output_dir/kernel）')
     parser.add_argument('--no-cgz', action='store_true', help='不创建cgz压缩包')
     parser.add_argument('--modules', help='内核模块输出文件路径（可选）')
+    parser.add_argument('--repo', help='仓库镜像链接，将替换repo-config中的配置文件并复制到rootfs的相应目录下')
+    parser.add_argument('-d', '--distribution',
+                        choices=['debian', 'ubuntu', 'openeuler', 'centos', 'rhel', 'fedora'],
+                        help='指定发行版名称（用于确定使用哪个配置文件和目标路径）')
     
     args = parser.parse_args()
+    
+    # 处理仓库镜像链接（如果提供了）
+    repo_url = args.repo
+    distribution = args.distribution
     
     try:
         result = qcow2rootfs(
@@ -335,7 +462,9 @@ def main():
             args.output,
             kernel_output=args.kernel,
             create_cgz=not args.no_cgz,
-            modules_output=args.modules
+            modules_output=args.modules,
+            repo_url=repo_url,
+            distribution=distribution
         )
         
         print("\n转换完成!")
@@ -345,6 +474,8 @@ def main():
             print(f"Rootfs压缩包: {result['rootfs_cgz']}")
         if result['modules_cgz']:
             print(f"内核模块压缩包: {result['modules_cgz']}")
+        if result['repo_updated']:
+            print(f"✓ 仓库镜像已更新 (发行版: {distribution or 'debian'})")
     
     except Exception as e:
         print(f"错误: {e}", file=sys.stderr)
