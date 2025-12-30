@@ -435,6 +435,7 @@ def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
             '--graphics', 'none',
             '--osinfo', 'detect=on,require=off',
             '--console', 'pty,target_type=serial',
+            '--boot', 'loader=/usr/share/AAVMF/AAVMF_CODE.fd,loader.readonly=yes,loader.type=pflash,nvram.template=/usr/share/AAVMF/AAVMF_VARS.fd'
         ]
         
         # 检查默认网络是否运行
