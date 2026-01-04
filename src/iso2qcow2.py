@@ -300,11 +300,11 @@ def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
             except Exception as e:
                 # 虚拟机可能不存在（已销毁或未定义）
                 print(f"无法获取虚拟机状态（可能不存在）: {e}")
-                return True  # 视为已停止
+                break  # 视为已停止
             
             if state in ('shut off', 'shutdown', 'in shutdown'):
                 print(f"虚拟机 {vm_name} 已停止")
-                return True
+                break
             elif state in ('running', 'idle', 'paused', 'blocked'):
                 if attempt == 0:
                     print(f"虚拟机 {vm_name} 状态为 {state}，尝试优雅关机...")
@@ -314,6 +314,7 @@ def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
                 
                 # 等待关机
                 wait_start = time.time()
+                grace_flag = False
                 while time.time() - wait_start < shutdown_timeout:
                     time.sleep(2)
                     try:
@@ -325,14 +326,19 @@ def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
                         )
                         if 'shut off' in result.stdout:
                             print(f"虚拟机 {vm_name} 已优雅关机")
-                            return True
+                            grace_flag = True
+                            break
                     except Exception:
                         pass
                 
                 # 超时后强制销毁
-                print(f"优雅关机超时，尝试强制销毁...")
-                subprocess.run(['virsh', 'destroy', vm_name], check=False)
-                # 继续循环，下一次迭代将检查状态
+                if not grace_flag:
+                    print(f"优雅关机超时，尝试强制销毁...")
+                    subprocess.run(['virsh', 'destroy', vm_name], check=False)
+                    # 继续循环，下一次迭代将检查状态
+                else:
+                    break
+
             else:
                 # 其他状态（如 'crashed', 'pmsuspended'）也尝试销毁
                 print(f"虚拟机 {vm_name} 状态为 {state}，尝试强制销毁...")

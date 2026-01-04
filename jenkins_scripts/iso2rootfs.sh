@@ -98,9 +98,16 @@ sudo apt-get install -y \
     virt-manager \
     python3-pexpect || error_exit "安装依赖失败"
 
-# 创建目录（提前检查并创建，避免权限问题）
-echo "2. 创建工作目录"
-sudo mkdir -p ${LOCAL_ROOTFS_DIR}/${TIMESTAMP} || error_exit "创建工作目录失败"
+echo "2. 检查default网络"
+# 启动default网络（如果已经启动则忽略错误，但继续执行）
+if ! virsh net-start default; then
+    echo "警告：default网络启动失败（可能已经启动或不存在），继续执行..."
+fi
+
+# 设置default网络开机自动启动（如果已经设置则忽略错误，但继续执行）
+if ! virsh net-autostart default; then
+    echo "警告：default网络自动启动设置失败（可能已经设置），继续执行..."
+fi
 
 echo "3. 检查ISO文件"
 if [ ! -f "$ISO_FILE" ]; then
@@ -113,6 +120,7 @@ if [ ! -f "$ISO_FILE" ]; then
 fi
 
 echo "4. 执行ISO转换rootfs操作"
+sudo mkdir -p ${LOCAL_ROOTFS_DIR}/${TIMESTAMP} || error_exit "创建本地rootfs目录失败"
 cd /c/rootfs-maker || error_exit "进入rootfs-maker目录失败"
 env LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 sudo ./src/iso2rootfs.py \
     -i "$ISO_FILE" \
