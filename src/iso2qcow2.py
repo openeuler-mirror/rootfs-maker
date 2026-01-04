@@ -557,12 +557,6 @@ def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
         
         print("安装完成!")
         
-        # 清理虚拟机（可选，保留镜像）
-        print(f"清理虚拟机: {vm_name}")
-        subprocess.run(['virsh', 'shutdown', vm_name], check=False)
-        remove_fd(vm_name)
-        subprocess.run(['virsh', 'undefine', vm_name], check=False)
-        
     finally:
         # 确保虚拟机已停止
         try:
