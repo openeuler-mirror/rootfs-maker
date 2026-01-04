@@ -278,6 +278,14 @@ def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
     temp_dir = tempfile.mkdtemp(prefix='iso2qcow2_')
     http_server = None
 
+    def remove_fd(vm_name):
+        vm_file = "/var/lib/libvirt/qemu/nvram/" + vm_name + "_VARS.fd"
+        if os.path.exists(vm_file):
+            os.remove(vm_file)
+            print(f"成功删除文件：{vm_file}")
+        else:
+            print(f"{vm_file}文件不存在")
+
     def ensure_vm_stopped(vm_name, max_retries=5, shutdown_timeout=30):
         """
         确保虚拟机已停止，先尝试优雅关机，失败后强制销毁。
@@ -352,13 +360,10 @@ def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
                 text=True,
                 timeout=5
             )
+            print(f"关闭虚拟机 {vm_name}最终检查输出:{result.stdout} ")
             if 'shut off' in result.stdout:
                 print(f"虚拟机 {vm_name} 最终已停止")
-
-            vm_file = "/var/lib/libvirt/qemu/nvram/"+ vm_name +"_VARS.fd"
-            if os.path.exists(vm_file):
-                os.remove(vm_file)
-                print(f"成功删除文件：{vm_file}")
+            remove_fd(vm_name)
             subprocess.run(['virsh', 'undefine', vm_name, '--nvram'], check=False, capture_output=True)
             return True
         except Exception:
@@ -368,7 +373,6 @@ def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
         return False
 
     try:
-
         # 设置配置文件
         if iso_type == 'deb':
             if preseed_file:
@@ -555,6 +559,8 @@ def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
         
         # 清理虚拟机（可选，保留镜像）
         print(f"清理虚拟机: {vm_name}")
+        subprocess.run(['virsh', 'shutdown', vm_name], check=False)
+        remove_fd(vm_name)
         subprocess.run(['virsh', 'undefine', vm_name], check=False)
         
     finally:
