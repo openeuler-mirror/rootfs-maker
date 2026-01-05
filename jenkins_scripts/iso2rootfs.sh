@@ -123,7 +123,7 @@ echo "4. 执行ISO转换rootfs操作"
 sudo rm -rf ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}
 sudo mkdir -p ${LOCAL_ROOTFS_DIR}/${TIMESTAMP} || error_exit "创建本地rootfs目录失败"
 cd /c/rootfs-maker || error_exit "进入rootfs-maker目录失败"
-env LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 sudo ./src/iso2rootfs.py \
+env LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 sudo python3 -u ./src/iso2rootfs.py \
     -i "$ISO_FILE" \
     -o "${LOCAL_ROOTFS_DIR}/${TIMESTAMP}" \
     -d debian \
