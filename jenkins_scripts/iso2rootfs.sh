@@ -46,6 +46,7 @@ ISO_FILE_SERVER=${ISO_FILE_SERVER-"http://os-cicd.byted.org/fileserver"}
 # 本地rootfs输出目录
 LOCAL_ROOTFS_DIR=${LOCAL_ROOTFS_DIR-"/data01/debian-arm64-rootfs"}
 
+
 # ===================== 配置项:禁止修改部分=====================
 
 ISO_DIR="${ISO_DIR}/${TIMESTAMP}"
@@ -123,6 +124,12 @@ echo "4. 执行ISO转换rootfs操作"
 sudo rm -rf ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}
 sudo mkdir -p ${LOCAL_ROOTFS_DIR}/${TIMESTAMP} || error_exit "创建本地rootfs目录失败"
 cd /c/rootfs-maker || error_exit "进入rootfs-maker目录失败"
+
+python_args=()
+if [ -n "$REPO" ]; then
+    python_args+=("--repo" "$REPO")
+fi
+
 env LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 sudo python3 -u ./src/iso2rootfs.py \
     -i "$ISO_FILE" \
     -o "${LOCAL_ROOTFS_DIR}/${TIMESTAMP}" \
@@ -134,7 +141,7 @@ env LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 sudo python3 -u ./src/iso2rootfs.py \
     --kernel "${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/vmlinuz-${TIMESTAMP}" \
     --modules "${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/modules-${TIMESTAMP}.cgz" \
     --http-port 8081 \
-    --repo https://os-cicd.byted.org/fileserver/${BRANCH}/${TIMESTAMP}/repo/ || error_exit "ISO转换rootfs失败"
+    "${python_args[@]}" || error_exit "ISO转换rootfs失败"
 
 # 检查生成的文件是否存在
 REQUIRED_FILES=(
