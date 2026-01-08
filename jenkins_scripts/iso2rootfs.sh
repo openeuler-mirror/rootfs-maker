@@ -25,7 +25,7 @@
 # cd /c/rootfs-maker/jenkins_scripts
 # bash -x iso2rootfs.sh
 
-set -euo pipefail  # 开启严格模式：报错立即退出、未定义变量报错、管道错误传递
+set -eo pipefail  # 开启严格模式：报错立即退出、未定义变量报错、管道错误传递
 
 # ==================== 由Jenkins Pipeline生成的环境变量==============
 BRANCH=${BRANCH-"master"}
