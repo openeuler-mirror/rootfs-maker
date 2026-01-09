@@ -1,0 +1,1 @@
+deb [trusted=yes] https://os-cicd.byted.org/fileserver/BRANCH/TIMESTAMP/repo/ CODENAME main

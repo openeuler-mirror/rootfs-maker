@@ -46,6 +46,10 @@ ISO_FILE_SERVER=${ISO_FILE_SERVER-"http://os-cicd.byted.org/fileserver"}
 # 本地rootfs输出目录
 LOCAL_ROOTFS_DIR=${LOCAL_ROOTFS_DIR-"/data01/debian-arm64-rootfs"}
 
+# 根据需要配置的变量
+#REPO
+#REPO_EXTRA
+
 
 # ===================== 配置项:禁止修改部分=====================
 
@@ -128,6 +132,10 @@ cd /c/rootfs-maker || error_exit "进入rootfs-maker目录失败"
 python_args=()
 if [ -n "$REPO" ]; then
     python_args+=("--repo" "$REPO")
+fi
+
+if [ -n "$REPO_EXTRA" ]; then
+    python_args+=("--repo-extra" "$REPO_EXTRA")
 fi
 
 env LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 sudo python3 -u ./src/iso2rootfs.py \
