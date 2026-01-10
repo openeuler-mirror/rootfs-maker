@@ -9,7 +9,9 @@ import socketserver
 import threading
 import time
 import socket
+import logging
 
+logger = logging.getLogger("common")
 
 def get_host_ip():
     """获取主机IP地址，用于HTTP服务器"""
@@ -160,13 +162,13 @@ def start_http_server(directory, port=8080):
             result = test_socket.connect_ex(('127.0.0.1', port))
             test_socket.close()
             if result == 0:
-                print(f"HTTP服务器在端口 {port} 上成功启动")
+                logger.info(f"HTTP服务器在端口 {port} 上成功启动")
                 break
         except Exception:
             pass
         time.sleep(1)
     else:
-        print(f"警告: HTTP服务器可能未在端口 {port} 上正确启动")
+        logger.warning(f"警告: HTTP服务器可能未在端口 {port} 上正确启动")
     
     return httpd, thread
 
@@ -192,10 +194,10 @@ def check_http_server_accessible(ip, port, filename, timeout=10):
     try:
         response = urllib.request.urlopen(url, timeout=timeout)
         if response.getcode() == 200:
-            print(f"HTTP服务器可访问: {url}")
+            logger.info(f"HTTP服务器可访问: {url}")
             return True
     except Exception as e:
-        print(f"HTTP服务器不可访问: {url}, 错误: {e}")
+        logger.error(f"HTTP服务器不可访问: {url}, 错误: {e}")
     
     return False
 
@@ -209,7 +211,7 @@ def check_firewall_status(port=8080):
     """
     import subprocess
     
-    print(f"检查防火墙状态，端口 {port}...")
+    logger.info(f"检查防火墙状态，端口 {port}...")
     
     # 检查firewalld
     try:
@@ -220,7 +222,7 @@ def check_firewall_status(port=8080):
             timeout=5
         )
         if result.returncode == 0 and 'active' in result.stdout:
-            print("检测到firewalld正在运行")
+            logger.info("检测到firewalld正在运行")
             # 检查端口是否开放
             result = subprocess.run(
                 ['firewall-cmd', '--list-ports'],
@@ -231,11 +233,11 @@ def check_firewall_status(port=8080):
             if result.returncode == 0:
                 ports = result.stdout.strip().split()
                 if f"{port}/tcp" not in ports:
-                    print(f"端口 {port}/tcp 未在firewalld中开放")
-                    print(f"建议运行: sudo firewall-cmd --add-port={port}/tcp --permanent && sudo firewall-cmd --reload")
+                    logger.info(f"端口 {port}/tcp 未在firewalld中开放")
+                    logger.info(f"建议运行: sudo firewall-cmd --add-port={port}/tcp --permanent && sudo firewall-cmd --reload")
                     return False
                 else:
-                    print(f"端口 {port}/tcp 已在firewalld中开放")
+                    logger.info(f"端口 {port}/tcp 已在firewalld中开放")
                     return True
     except Exception:
         pass
@@ -249,7 +251,7 @@ def check_firewall_status(port=8080):
             timeout=5
         )
         if result.returncode == 0 and 'active' in result.stdout:
-            print("检测到ufw正在运行")
+            logger.info("检测到ufw正在运行")
             result = subprocess.run(
                 ['ufw', 'status'],
                 capture_output=True,
@@ -257,14 +259,14 @@ def check_firewall_status(port=8080):
                 timeout=5
             )
             if result.returncode == 0 and f"{port}/tcp" not in result.stdout:
-                print(f"端口 {port}/tcp 未在ufw中开放")
-                print(f"建议运行: sudo ufw allow {port}/tcp")
+                logger.info(f"端口 {port}/tcp 未在ufw中开放")
+                logger.info(f"建议运行: sudo ufw allow {port}/tcp")
                 return False
             else:
-                print(f"端口 {port}/tcp 已在ufw中开放")
+                logger.info(f"端口 {port}/tcp 已在ufw中开放")
                 return True
     except Exception:
         pass
     
-    print("未检测到活跃的防火墙或端口已开放")
+    logger.info("未检测到活跃的防火墙或端口已开放")
     return True

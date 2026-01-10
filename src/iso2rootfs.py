@@ -3,12 +3,11 @@
 ISO转rootfs工具
 通过调用iso2qcow2和qcow2rootfs实现ISO到rootfs的转换
 """
-
-import os
 import sys
+import os
 import argparse
-import tempfile
-import shutil
+import logging
+import logging.config
 from pathlib import Path
 
 # 添加当前目录到路径
@@ -16,6 +15,15 @@ sys.path.insert(0, str(Path(__file__).parent))
 from iso2qcow2 import iso2qcow2
 from qcow2rootfs import qcow2rootfs
 
+
+def init_logger():
+    os.makedirs('logs', exist_ok=True)
+    logger_config = os.path.join(str(Path(__file__).parent.parent), 'config','logger.conf')
+    print(f"logger_config: {logger_config}")
+    logging.config.fileConfig(logger_config, encoding="utf-8")
+    return logging.getLogger('common')
+
+logger = init_logger()
 
 def iso2rootfs(iso_path, output_dir, preseed_file=None, ks_file=None,
                disk_size='20G', memory=2048, vcpus=2, timeout=3600,
@@ -57,9 +65,9 @@ def iso2rootfs(iso_path, output_dir, preseed_file=None, ks_file=None,
     
     try:
         # 步骤1: ISO转QCOW2
-        print("=" * 60)
-        print("步骤1: ISO转QCOW2")
-        print("=" * 60)
+        logger.info("=" * 60)
+        logger.info("步骤1: ISO转QCOW2")
+        logger.info("=" * 60)
         iso2qcow2(
             str(iso_path),
             str(temp_qcow2),
@@ -74,9 +82,9 @@ def iso2rootfs(iso_path, output_dir, preseed_file=None, ks_file=None,
         )
         
         # 步骤2: QCOW2转rootfs
-        print("\n" + "=" * 60)
-        print("步骤2: QCOW2转rootfs")
-        print("=" * 60)
+        logger.info("\n" + "=" * 60)
+        logger.info("步骤2: QCOW2转rootfs")
+        logger.info("=" * 60)
         result = qcow2rootfs(
             str(temp_qcow2),
             str(output_dir),
@@ -89,23 +97,23 @@ def iso2rootfs(iso_path, output_dir, preseed_file=None, ks_file=None,
         
         # 清理临时QCOW2文件（如果不需要保留）
         if not keep_qcow2 and temp_qcow2.exists():
-            print(f"\n清理临时QCOW2文件: {temp_qcow2}")
+            logger.info(f"\n清理临时QCOW2文件: {temp_qcow2}")
             temp_qcow2.unlink()
         elif keep_qcow2:
-            print(f"\n保留QCOW2文件: {temp_qcow2}")
+            logger.info(f"\n保留QCOW2文件: {temp_qcow2}")
         
-        print("\n" + "=" * 60)
-        print("转换完成!")
-        print("=" * 60)
-        print(f"输出目录: {output_dir}")
-        print(f"Kernel: {result['kernel']}")
-        print(f"Rootfs目录: {result['rootfs_dir']}")
+        logger.info("\n" + "=" * 60)
+        logger.info("转换完成!")
+        logger.info("=" * 60)
+        logger.debug(f"输出目录: {output_dir}")
+        logger.debug(f"Kernel: {result['kernel']}")
+        logger.debug(f"Rootfs目录: {result['rootfs_dir']}")
         if result['rootfs_cgz']:
-            print(f"Rootfs压缩包: {result['rootfs_cgz']}")
+            logger.info(f"Rootfs压缩包: {result['rootfs_cgz']}")
         if result.get('modules_cgz'):
-            print(f"内核模块压缩包: {result['modules_cgz']}")
+            logger.info(f"内核模块压缩包: {result['modules_cgz']}")
         if result.get('repo_updated'):
-            print(f"✓ 仓库镜像已更新")
+            logger.info(f"✓ 仓库镜像已更新")
         
         return result
     
@@ -182,10 +190,10 @@ def main():
             repo_extra=args.repo_extra
         )
     except KeyboardInterrupt:
-        print("\n\n用户中断", file=sys.stderr)
+        logger.error(f"\n\n用户中断")
         sys.exit(1)
     except Exception as e:
-        print(f"错误: {e}", file=sys.stderr)
+        logger.error(f"错误: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

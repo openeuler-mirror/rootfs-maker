@@ -4,13 +4,14 @@ QCOW2转rootfs工具
 从QCOW2镜像中提取rootfs，分离kernel，并将rootfs打包为cgz格式
 """
 
-import os
-import sys
-import subprocess
-import tempfile
-import shutil
 import argparse
 import importlib
+import logging.config
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 # 添加lib目录到路径
@@ -20,6 +21,13 @@ from lib.cgz_utils import compress_cgz
 # 导入pexpect用于guestfish交互
 import pexpect
 
+if not logging.getLogger().hasHandlers():
+    os.makedirs('logs', exist_ok=True)
+    logger_config = os.path.join(str(Path(__file__).parent.parent), 'config', 'logger.conf')
+    print(f"logger_config: {logger_config}")
+    logging.config.fileConfig(logger_config, encoding="utf-8")
+
+logger = logging.getLogger("common")
 
 def check_guestfish():
     """检查guestfish是否可用"""
@@ -50,8 +58,8 @@ def extract_qcow2_with_guestfish(qcow2_path, tar_output):
     tar_output = Path(tar_output)
     tar_output.parent.mkdir(parents=True, exist_ok=True)
     
-    print(f"使用guestfish导出QCOW2文件系统: {qcow2_path}")
-    print(f"输出到: {tar_output}")
+    logger.info(f"使用guestfish导出QCOW2文件系统: {qcow2_path}")
+    logger.info(f"输出到: {tar_output}")
     
     # 启动guestfish
     # -i: 自动检测并挂载文件系统
@@ -64,7 +72,7 @@ def extract_qcow2_with_guestfish(qcow2_path, tar_output):
     
     try:
         # 等待guestfish提示符
-        print("等待guestfish就绪...")
+        logger.info("等待guestfish就绪...")
         child.expect('><fs>', timeout=300)
         
         # 使用tar-out导出整个文件系统
@@ -74,12 +82,12 @@ def extract_qcow2_with_guestfish(qcow2_path, tar_output):
         # selinux:true - 保留SELinux上下文
         # acls:true - 保留ACL
         tar_cmd = f"tar-out / {tar_output} compress:gzip numericowner:true xattrs:true selinux:true acls:true"
-        print(f"执行: {tar_cmd}")
+        logger.debug(f"执行: {tar_cmd}")
         
         child.sendline(tar_cmd)
         
         # 等待命令完成（tar-out可能需要较长时间）
-        print("正在导出文件系统，请稍候...")
+        logger.info("正在导出文件系统，请稍候...")
         child.expect('><fs>', timeout=1800)
         
         # 退出guestfish
@@ -89,15 +97,15 @@ def extract_qcow2_with_guestfish(qcow2_path, tar_output):
         if not tar_output.exists():
             raise RuntimeError(f"tar输出文件不存在: {tar_output}")
         
-        print(f"✓ 文件系统已导出到: {tar_output}")
+        logger.info(f"✓ 文件系统已导出到: {tar_output}")
         return True
         
     except pexpect.TIMEOUT:
-        print("错误: guestfish操作超时")
+        logger.error("错误: guestfish操作超时")
         child.close(force=True)
         return False
     except Exception as e:
-        print(f"错误: {e}")
+        logger.error(f"错误: {e}")
         child.close(force=True)
         return False
 
@@ -180,7 +188,7 @@ def extract_kernel_and_rootfs(qcow2_path, output_dir, kernel_output=None):
             raise RuntimeError("guestfish导出失败")
         
         # 解压tar文件到临时目录
-        print("解压tar文件...")
+        logger.info("解压tar文件...")
         temp_extract = tempfile.mkdtemp(prefix='qcow2_extract_')
         try:
             subprocess.run(
@@ -191,13 +199,13 @@ def extract_kernel_and_rootfs(qcow2_path, output_dir, kernel_output=None):
             )
             
             # 查找kernel
-            print("查找kernel文件...")
+            logger.info("查找kernel文件...")
             extract_path = Path(temp_extract)
             kernels = find_kernel(str(extract_path))
-            print(f"找到kernel文件: {[str(k) for k in kernels]}")
+            logger.info(f"找到kernel文件: {[str(k) for k in kernels]}")
             
             # 复制rootfs内容（排除kernel和虚拟文件系统）
-            print("复制rootfs内容...")
+            logger.info("复制rootfs内容...")
             kernel_relative_paths = set()
             for kernel in kernels:
                 try:
@@ -231,7 +239,7 @@ def extract_kernel_and_rootfs(qcow2_path, output_dir, kernel_output=None):
             # 注释掉fstab中未注释的行（防止启动时挂载）
             fstab_path = rootfs_output / 'etc' / 'fstab'
             if fstab_path.exists():
-                print(f"注释fstab: {fstab_path}")
+                logger.info(f"注释fstab: {fstab_path}")
                 try:
                     subprocess.run(
                         ['sed', '-i', r's/^\([^#]\)/# \1/g', str(fstab_path)],
@@ -240,26 +248,26 @@ def extract_kernel_and_rootfs(qcow2_path, output_dir, kernel_output=None):
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE
                     )
-                    print("✓ fstab已注释")
+                    logger.info("✓ fstab已注释")
                 except subprocess.CalledProcessError as e:
-                    print(f"警告: 注释fstab失败: {e}")
+                    logger.warning(f"警告: 注释fstab失败: {e}")
             else:
-                print(f"提示: fstab文件不存在: {fstab_path}")
+                logger.info(f"提示: fstab文件不存在: {fstab_path}")
             # 提取kernel文件
             if kernels:
                 main_kernel = sorted(kernels, key=lambda x: x.stat().st_mtime, reverse=True)[0]
-                print(f"提取kernel: {main_kernel} -> {kernel_output}")
+                logger.info(f"提取kernel: {main_kernel} -> {kernel_output}")
                 shutil.copy2(main_kernel, kernel_output)
             else:
-                print("警告: 未找到kernel文件")
+                logger.warning("警告: 未找到kernel文件")
             
         finally:
             # 清理临时解压目录
             if os.path.exists(temp_extract):
                 shutil.rmtree(temp_extract, ignore_errors=True)
         
-        print(f"Rootfs已提取到: {rootfs_output}")
-        print(f"Kernel已提取到: {kernel_output}")
+        logger.info(f"Rootfs已提取到: {rootfs_output}")
+        logger.info(f"Kernel已提取到: {kernel_output}")
         
     finally:
         # 清理临时tar文件
@@ -267,7 +275,7 @@ def extract_kernel_and_rootfs(qcow2_path, output_dir, kernel_output=None):
             temp_tar.unlink()
 
 def update_repo(repo, repo_extra, rootfs_dir):
-    print(f"repo模板: {repo}, repo模板参数：{repo_extra}")
+    logger.debug(f"repo模板: {repo}, repo模板参数：{repo_extra}")
     try:
         repo_extra_dic = {}
         if repo_extra:
@@ -275,12 +283,12 @@ def update_repo(repo, repo_extra, rootfs_dir):
                 repo_extra_dic[extra.split("=")[0]] = extra.split("=")[1]
         # 导入repo_config中以repo变量命名的update_repo模块
         module_path = f"repo_config.{repo}.update_repo"
-        print(f"import module {module_path}")
+        logger.debug(f"import module {module_path}")
         update_repo_module = importlib.import_module(module_path)
         # 更新repo_config中并拷贝到rootfs目录中
         update_repo_module.update_repo_config(repo, repo_extra_dic, rootfs_dir)
     except Exception as e:
-        print(f"警告: 更新仓库配置失败: {e}")
+        logger.warning(f"警告: 更新仓库配置失败: {e}")
 
 def qcow2rootfs(qcow2_path, output_dir, kernel_output=None, create_cgz=True, modules_output=None, repo=None, repo_extra=None):
     """
@@ -312,14 +320,14 @@ def qcow2rootfs(qcow2_path, output_dir, kernel_output=None, create_cgz=True, mod
     
     # 打包为cgz
     if create_cgz:
-        print(f"打包rootfs为cgz: {cgz_output}")
+        logger.info(f"打包rootfs为cgz: {cgz_output}")
         compress_cgz(str(rootfs_dir), str(cgz_output))
-        print(f"Rootfs已打包为: {cgz_output}")
+        logger.info(f"Rootfs已打包为: {cgz_output}")
     
     # 打包内核模块
     modules_cgz = None
     if modules_output is not None:
-        print(f"打包内核模块到: {modules_output}")
+        logger.info(f"打包内核模块到: {modules_output}")
         # 查找lib/modules目录
         modules_dir = rootfs_dir / 'lib' / 'modules'
         if not modules_dir.exists():
@@ -330,7 +338,7 @@ def qcow2rootfs(qcow2_path, output_dir, kernel_output=None, create_cgz=True, mod
             raise FileNotFoundError(f"模块目录下未找到内核版本子目录: {modules_dir}")
         # 选择最新的子目录（按名称降序排序）
         selected = sorted(subdirs, key=lambda d: d.name, reverse=True)[0]
-        print(f"选择内核模块版本: {selected.name}")
+        logger.info(f"选择内核模块版本: {selected.name}")
         # 使用compress_cgz压缩
         compress_cgz(str(selected), modules_output)
         modules_cgz = modules_output
@@ -375,18 +383,18 @@ def main():
             repo_extra=repo_extra
         )
 
-        print("\n转换完成!")
-        print(f"Kernel: {result['kernel']}")
-        print(f"Rootfs目录: {result['rootfs_dir']}")
+        logger.info("\n转换完成!")
+        logger.info(f"Kernel: {result['kernel']}")
+        logger.info(f"Rootfs目录: {result['rootfs_dir']}")
         if result['rootfs_cgz']:
-            print(f"Rootfs压缩包: {result['rootfs_cgz']}")
+            logger.info(f"Rootfs压缩包: {result['rootfs_cgz']}")
         if result['modules_cgz']:
-            print(f"内核模块压缩包: {result['modules_cgz']}")
+            logger.info(f"内核模块压缩包: {result['modules_cgz']}")
         if result['repo_updated']:
-            print(f"✓ 仓库镜像已更新 (发行版: {distribution or 'debian'})")
+            logger.info(f"✓ 仓库镜像已更新 (发行版: {distribution or 'debian'})")
 
     except Exception as e:
-        print(f"错误: {e}", file=sys.stderr)
+        logger.error(f"错误: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

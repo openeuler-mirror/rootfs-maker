@@ -4,18 +4,25 @@ Docker转rootfs工具
 从Docker镜像中提取rootfs，分离kernel，并将rootfs打包为cgz格式
 """
 
-import os
-import sys
-import subprocess
 import argparse
-import tempfile
+import logging.config
+import os
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 # 添加lib目录到路径
 sys.path.insert(0, str(Path(__file__).parent))
 from lib.cgz_utils import compress_cgz
 
+if not logging.getLogger().hasHandlers():
+    os.makedirs('logs', exist_ok=True)
+    logger_config = os.path.join(str(Path(__file__).parent.parent), 'config', 'logger.conf')
+    print(f"logger_config: {logger_config}")
+    logging.config.fileConfig(logger_config, encoding="utf-8")
+
+logger = logging.getLogger("common")
 
 def extract_docker_image(image_name, output_dir):
     """
@@ -46,7 +53,7 @@ def extract_docker_image(image_name, output_dir):
             raise RuntimeError(f"Docker镜像不存在: {image_name}")
         
         # 创建临时容器（不启动）
-        print(f"创建临时容器: {temp_container}")
+        logger.info(f"创建临时容器: {temp_container}")
         subprocess.run(
             ['docker', 'create', '--name', temp_container, image_name],
             check=True,
@@ -55,7 +62,7 @@ def extract_docker_image(image_name, output_dir):
         )
         
         # 导出容器文件系统
-        print("导出容器文件系统...")
+        logger.info("导出容器文件系统...")
         export_process = subprocess.Popen(
             ['docker', 'export', temp_container],
             stdout=subprocess.PIPE,
@@ -81,7 +88,7 @@ def extract_docker_image(image_name, output_dir):
             stderr = extract_process.stderr.read().decode('utf-8', errors='ignore')
             raise RuntimeError(f"解压失败: {stderr}")
         
-        print(f"文件系统已导出到: {rootfs_dir}")
+        logger.info(f"文件系统已导出到: {rootfs_dir}")
         
         return rootfs_dir
     
@@ -158,22 +165,22 @@ def docker2rootfs(image_name, output_dir, kernel_output=None, create_cgz=True):
     cgz_output = output_dir / 'rootfs.cgz'
     
     # 提取Docker镜像文件系统
-    print("=" * 60)
-    print("步骤1: 从Docker镜像提取文件系统")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("步骤1: 从Docker镜像提取文件系统")
+    logger.info("=" * 60)
     extracted_rootfs = extract_docker_image(image_name, output_dir)
     
     # 查找并提取kernel
-    print("\n" + "=" * 60)
-    print("步骤2: 查找和提取kernel")
-    print("=" * 60)
+    logger.info("\n" + "=" * 60)
+    logger.info("步骤2: 查找和提取kernel")
+    logger.info("=" * 60)
     kernels = find_kernel_in_rootfs(str(extracted_rootfs))
     
     if kernels:
         # 使用第一个找到的kernel（通常是最新的）
         main_kernel = sorted(kernels, key=lambda x: x.stat().st_mtime, reverse=True)[0]
-        print(f"找到kernel: {main_kernel}")
-        print(f"提取到: {kernel_output}")
+        logger.info(f"找到kernel: {main_kernel}")
+        logger.info(f"提取到: {kernel_output}")
         shutil.copy2(main_kernel, kernel_output)
         
         # 从rootfs中删除kernel
@@ -192,22 +199,22 @@ def docker2rootfs(image_name, output_dir, kernel_output=None, create_cgz=True):
         except ValueError:
             pass
     else:
-        print("警告: 未找到kernel文件（Docker镜像通常不包含kernel）")
+        logger.warning("警告: 未找到kernel文件（Docker镜像通常不包含kernel）")
         # 创建一个空文件或占位符
         kernel_output.touch()
     
     # 打包为cgz
     if create_cgz:
-        print("\n" + "=" * 60)
-        print("步骤3: 打包rootfs为cgz")
-        print("=" * 60)
-        print(f"打包rootfs为cgz: {cgz_output}")
+        logger.info("\n" + "=" * 60)
+        logger.info("步骤3: 打包rootfs为cgz")
+        logger.info("=" * 60)
+        logger.info(f"打包rootfs为cgz: {cgz_output}")
         compress_cgz(str(extracted_rootfs), str(cgz_output))
-        print(f"Rootfs已打包为: {cgz_output}")
+        logger.info(f"Rootfs已打包为: {cgz_output}")
     
-    print("\n" + "=" * 60)
-    print("转换完成!")
-    print("=" * 60)
+    logger.info("\n" + "=" * 60)
+    logger.info("转换完成!")
+    logger.info("=" * 60)
     
     return {
         'kernel': kernel_output,
@@ -253,7 +260,7 @@ def main():
             stderr=subprocess.PIPE
         )
     except (subprocess.CalledProcessError, FileNotFoundError):
-        print("错误: Docker未安装或不可用", file=sys.stderr)
+        logger.error("错误: Docker未安装或不可用", file=sys.stderr)
         sys.exit(1)
     
     try:
@@ -264,17 +271,17 @@ def main():
             create_cgz=not args.no_cgz
         )
         
-        print(f"\n输出目录: {args.output}")
-        print(f"Kernel: {result['kernel']}")
-        print(f"Rootfs目录: {result['rootfs_dir']}")
+        logger.info(f"\n输出目录: {args.output}")
+        logger.info(f"Kernel: {result['kernel']}")
+        logger.info(f"Rootfs目录: {result['rootfs_dir']}")
         if result['rootfs_cgz']:
-            print(f"Rootfs压缩包: {result['rootfs_cgz']}")
+            logger.info(f"Rootfs压缩包: {result['rootfs_cgz']}")
     
     except KeyboardInterrupt:
-        print("\n\n用户中断", file=sys.stderr)
+        logger.error("\n\n用户中断")
         sys.exit(1)
     except Exception as e:
-        print(f"错误: {e}", file=sys.stderr)
+        logger.error(f"错误: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

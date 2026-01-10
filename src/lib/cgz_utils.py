@@ -7,9 +7,10 @@ CGZ压缩和解压工具
 import os
 import subprocess
 import tempfile
-import shutil
+import logging
 from pathlib import Path
 
+logger = logging.getLogger('common')
 
 def compress_cgz(source_dir, output_file):
     """
@@ -190,13 +191,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     if args.command == 'compress':
-        print(f"正在压缩 {args.source_dir} 到 {args.output_file}...")
+        logger.info(f"正在压缩 {args.source_dir} 到 {args.output_file}...")
         compress_cgz(args.source_dir, args.output_file)
-        print("压缩完成!")
+        logger.info("压缩完成!")
     elif args.command == 'extract':
-        print(f"正在解压 {args.cgz_file} 到 {args.output_dir}...")
+        logger.info(f"正在解压 {args.cgz_file} 到 {args.output_dir}...")
         extract_cgz(args.cgz_file, args.output_dir)
-        print("解压完成!")
+        logger.info("解压完成!")
     else:
         parser.print_help()
 

@@ -7,7 +7,9 @@ RPM系统自动化安装脚本
 import pexpect
 import sys
 import time
+import logging
 
+logger = logging.getLogger("common")
 
 def auto_install_grub(vm_name, ks_url):
     """
@@ -18,7 +20,7 @@ def auto_install_grub(vm_name, ks_url):
         ks_url: kickstart文件的HTTP URL
     """
     cmd = f"virsh console {vm_name}"
-    print(f"正在连接虚拟机: {cmd}")
+    logger.info(f"正在连接虚拟机: {cmd}")
 
     # spawn 启动进程
     child = pexpect.spawn(cmd)
@@ -34,7 +36,7 @@ def auto_install_grub(vm_name, ks_url):
         # 阶段 1: 等待 GRUB 菜单出现
         # 匹配特征文本: "Use the ^ and v keys to select"
         # ==========================================
-        print("\n\n[状态] 等待 GRUB 菜单...")
+        logger.info("\n\n[状态] 等待 GRUB 菜单...")
         index = child.expect([
             r"Use the \^ and v keys to select",  # 匹配成功
             r"Press 'e' to edit",  # 另一种GRUB菜单格式
@@ -44,19 +46,19 @@ def auto_install_grub(vm_name, ks_url):
         ])
 
         if index >= 3:  # TIMEOUT or EOF
-            print("\n[错误] 未检测到 GRUB 菜单 (超时或连接关闭)")
+            logger.error("\n[错误] 未检测到 GRUB 菜单 (超时或连接关闭)")
             return
 
         # 稍微缓冲一下，确保输入能被接收
         time.sleep(1)
-        print("\n[动作] 检测到菜单，发送 'e' 进入编辑模式...")
+        logger.info("\n[动作] 检测到菜单，发送 'e' 进入编辑模式...")
         child.send('e')
 
         # ==========================================
         # 阶段 2: 等待编辑界面加载
         # 匹配特征文本: "Minimum Emacs-like screen editing"
         # ==========================================
-        print("\n[状态] 等待进入编辑模式...")
+        logger.info("\n[状态] 等待进入编辑模式...")
         index = child.expect([
             r"Minimum Emacs-like screen editing",
             r"linux",  # 直接看到linux行
@@ -64,10 +66,10 @@ def auto_install_grub(vm_name, ks_url):
         ])
 
         if index == 2:
-            print("\n[错误] 未能进入编辑模式")
+            logger.error("\n[错误] 未能进入编辑模式")
             return
             
-        print("\n[动作] 已进入编辑模式，开始导航...")
+        logger.info("\n[动作] 已进入编辑模式，开始导航...")
         time.sleep(1)
 
         # ==========================================
@@ -88,26 +90,26 @@ def auto_install_grub(vm_name, ks_url):
         # 3. 输入 Kickstart 参数
         # 注意最前面的空格，防止和已有参数粘连
         params = f" inst.ks={ks_url} console=ttyS0"
-        print(f"\n[动作] 输入参数: {params}")
+        logger.info(f"\n[动作] 输入参数: {params}")
         child.send(params)
         time.sleep(0.5)
 
         # ==========================================
         # 阶段 4: 启动 (Ctrl+X)
         # ==========================================
-        print("\n[动作] 发送 Ctrl+X 启动系统...")
+        logger.info("\n[动作] 发送 Ctrl+X 启动系统...")
         child.sendcontrol('x') # 发送 Ctrl+X
 
         # ==========================================
         # 阶段 5: 等待安装开始
         # ==========================================
-        print("\n[完成] GRUB配置完成，等待安装开始...")
+        logger.info("\n[完成] GRUB配置完成，等待安装开始...")
         # 不调用interact()，让函数返回，主程序可以继续监控安装过程
         time.sleep(2)
         return True
 
     except Exception as e:
-        print(f"\n[异常] 发生错误: {e}")
+        logger.error(f"\n[异常] 发生错误: {e}")
         return False
 
 
