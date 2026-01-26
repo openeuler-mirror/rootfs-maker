@@ -53,6 +53,12 @@ LOCAL_ROOTFS_DIR=${LOCAL_ROOTFS_DIR-"/data01/debian-arm64-rootfs"}
 
 # ===================== 配置项:禁止修改部分=====================
 
+if [ -f ${WORKSPACE}/config ];then
+  debversion=$(cat ${WORKSPACE}/config | grep DEBVERSION | awk -F '=' '{print $2}')
+  arch=$(cat ${WORKSPACE}/config | grep ARCHITECTURES | awk -F '=' '{print $2}')
+  ISO_NAME="byted-debian-${debversion}-${arch}-DVD-1.iso"
+fi
+
 ISO_DIR="${ISO_DIR}/${TIMESTAMP}"
 ISO_FILE_SERVER="${ISO_FILE_SERVER}/${BRANCH}/${TIMESTAMP}/iso/${ARCH}"
 # ISO本地目录
