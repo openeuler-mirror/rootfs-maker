@@ -515,8 +515,8 @@ def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
                         break
                 except Exception:
                     pass
-                time.sleep(2)
-                waited += 2
+                time.sleep(1)
+                waited += 1
             
             # 使用expect脚本配置GRUB
             logger.info("\n使用expect脚本配置GRUB启动参数...")

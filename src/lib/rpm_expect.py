@@ -29,7 +29,7 @@ def auto_install_grub(vm_name, ks_url):
     child.logfile = sys.stdout.buffer
 
     # 设置较长的超时时间，防止启动慢导致脚本退出
-    child.timeout = 300
+    child.timeout = 30
 
     try:
         # ==========================================
@@ -46,8 +46,7 @@ def auto_install_grub(vm_name, ks_url):
         ])
 
         if index >= 3:  # TIMEOUT or EOF
-            logger.error("\n[错误] 未检测到 GRUB 菜单 (超时或连接关闭)")
-            return
+            logger.warning("\n[警告] 未检测到 GRUB 菜单，尝试继续执行...")
 
         # 稍微缓冲一下，确保输入能被接收
         time.sleep(1)
@@ -67,7 +66,7 @@ def auto_install_grub(vm_name, ks_url):
 
         if index == 2:
             logger.error("\n[错误] 未能进入编辑模式")
-            return
+            return False
             
         logger.info("\n[动作] 已进入编辑模式，开始导航...")
         time.sleep(1)
