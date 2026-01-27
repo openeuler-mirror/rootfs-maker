@@ -141,8 +141,16 @@ if [ -n "$REPO" ]; then
 fi
 
 if [ -n "$REPO_EXTRA" ]; then
-    python_args+=("--repo-extra" "$REPO_EXTRA")
+    if echo "$REPO_EXTRA" | grep -q "CODENAME" && [ -f "${WORKSPACE}/config" ];then
+        codename=$(cat ${WORKSPACE}/config | grep CODENAME | awk -F '=' '{print $2}')
+        NEW_REPO_EXTRA=${REPO_EXTRA//CODENAME=*/CODENAME=${codename}}
+    else
+        NEW_REPO_EXTRA="$REPO_EXTRA"
+    fi
+    python_args+=("--repo-extra" "$NEW_REPO_EXTRA")
 fi
+
+echo "the extra args is ${python_args[@]}"
 
 env LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 sudo python3 -u ./src/iso2rootfs.py \
     -i "$ISO_FILE" \
