@@ -27,7 +27,7 @@
 --modules：modules输出路径   
 --no-cgz：不生成cgz压缩包  
 --keep-qcow2：保留虚拟磁盘(qcow2)中间文件  
---http-port： 启动http服务的端口，提供配置文件给虚拟机加载 默认8080  
+--http-port： 启动http服务的端口，提供配置文件给虚拟机加载 默认为0即随机端口  
 --repo: 仓库镜像链接，将替换repo-config中的配置文件并复制到rootfs的相应目录下
 
 

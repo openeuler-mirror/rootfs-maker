@@ -58,13 +58,13 @@ def get_host_ip():
 class ConfigHTTPServer:
     """配置文件HTTP服务器"""
     
-    def __init__(self, directory, port=8080):
+    def __init__(self, directory, port=0):
         """
         初始化HTTP服务器
         
         Args:
             directory: 服务目录路径
-            port: 端口号（默认8080）
+            port: 端口号（默认0,随机端口）
         """
         self.directory = str(directory)
         self.port = port
@@ -120,7 +120,7 @@ class ConfigHTTPServer:
         return f"http://{get_host_ip()}:{self.port}/{filename}"
 
 
-def start_http_server(directory, port=8080):
+def start_http_server(directory, port=0):
     """
     启动HTTP服务器提供preseed/ks文件（兼容函数）
 
@@ -145,7 +145,8 @@ def start_http_server(directory, port=8080):
             return os.path.join(directory, path)
     
     httpd = socketserver.TCPServer(("", port), CustomHandler)
-    
+    actual_port = httpd.server_address[1]
+
     def serve():
         httpd.serve_forever()
     
@@ -159,18 +160,18 @@ def start_http_server(directory, port=8080):
             # 测试服务器是否可访问
             test_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             test_socket.settimeout(2)
-            result = test_socket.connect_ex(('127.0.0.1', port))
+            result = test_socket.connect_ex(('127.0.0.1', actual_port))
             test_socket.close()
             if result == 0:
-                logger.info(f"HTTP服务器在端口 {port} 上成功启动")
+                logger.info(f"HTTP服务器在端口 {actual_port} 上成功启动")
                 break
         except Exception:
             pass
         time.sleep(1)
     else:
-        logger.warning(f"警告: HTTP服务器可能未在端口 {port} 上正确启动")
+        logger.warning(f"警告: HTTP服务器可能未在端口 {actual_port} 上正确启动")
     
-    return httpd, thread
+    return httpd, thread, actual_port
 
 
 def check_http_server_accessible(ip, port, filename, timeout=10):

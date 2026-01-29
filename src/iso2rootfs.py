@@ -29,7 +29,7 @@ logger = init_logger()
 def iso2rootfs(iso_path, output_dir, preseed_file=None, ks_file=None,
                disk_size='20G', memory=2048, vcpus=2, timeout=3600,
                kernel_output=None, create_cgz=True, keep_qcow2=False,
-               distribution=None, http_port=8080, modules_output=None,
+               distribution=None, http_port=0, modules_output=None,
                repo=None, repo_extra=None):
     """
     将ISO转换为rootfs
@@ -165,7 +165,7 @@ def main():
     parser.add_argument('--no-cgz', action='store_true', help='不创建cgz压缩包')
     parser.add_argument('--keep-qcow2', action='store_true', help='保留中间QCOW2文件')
     parser.add_argument('--modules', help='内核模块输出文件路径（可选）')
-    parser.add_argument('--http-port', type=int, default=8080, help='HTTP服务器端口（默认: 8080）')
+    parser.add_argument('--http-port', type=int, default=0, help='HTTP服务器端口（默认: 8080）')
     parser.add_argument('--repo', help='repo模板, 比如openeuler,bytedance')
     parser.add_argument('--repo-extra', help='repo源中要替换的变量,以键值对方式提供，多个键值对用逗号分隔')
 

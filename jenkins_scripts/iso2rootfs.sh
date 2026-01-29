@@ -46,6 +46,7 @@ ISO_FILE_SERVER=${ISO_FILE_SERVER-"http://os-cicd.byted.org/fileserver"}
 # 本地rootfs输出目录
 LOCAL_ROOTFS_DIR=${LOCAL_ROOTFS_DIR-"/data01/debian-arm64-rootfs"}
 
+HTTP_PORT=${HTTP_PORT-0}
 # 根据需要配置的变量
 #REPO
 #REPO_EXTRA
@@ -162,7 +163,7 @@ env LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 sudo python3 -u ./src/iso2rootfs.py \
     -t 7200 \
     --kernel "${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/vmlinuz-${TIMESTAMP}" \
     --modules "${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/modules-${TIMESTAMP}.cgz" \
-    --http-port 8081 \
+    --http-port ${HTTP_PORT} \
     "${python_args[@]}" || error_exit "ISO转换rootfs失败"
 
 # 检查生成的文件是否存在

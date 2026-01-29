@@ -236,7 +236,7 @@ def generate_from_template(output_path, distribution, iso_type):
 
 def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
               disk_size='20G', memory=2048, vcpus=2, timeout=3600,
-              vm_name=None, distribution=None, http_port=8080):
+              vm_name=None, distribution=None, http_port=0):
     """
     将ISO转换为QCOW2镜像
     
@@ -250,6 +250,8 @@ def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
         vcpus: CPU核心数
         timeout: 安装超时时间（秒）
         vm_name: 虚拟机名称（如果为None则自动生成）
+        distribution: 发行版名称 (debian, ubuntu, openeuler, centos, rhel, fedora)
+        http_port: http服务端口
     """
     iso_path = Path(iso_path).resolve()
     if not iso_path.exists():
@@ -393,7 +395,7 @@ def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
                 else:
                     logger.info(f"使用模板: templates/{distribution}/preseed.cfg")
                 generate_from_template(Path(temp_dir) / 'preseed.cfg', distribution, 'deb')
-            config_url = f"http://{get_host_ip()}:{http_port}/preseed.cfg"
+            ks_filename = "preseed.cfg"
         else:  # rpm
             if ks_file:
                 # 保持原始文件名，但如果是.ks结尾则直接使用
@@ -402,7 +404,6 @@ def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
                     ks_filename = 'ks.ks'
                 shutil.copy(ks_file, Path(temp_dir) / ks_filename)
                 logger.info(f"使用提供的kickstart文件: {ks_file}")
-                config_url = f"http://{get_host_ip()}:{http_port}/{ks_filename}"
             else:
                 # 如果没有指定发行版，尝试使用centos作为默认
                 if distribution is None:
@@ -411,11 +412,11 @@ def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
                 else:
                     logger.info(f"使用模板: templates/{distribution}/ks.ks")
                 generate_from_template(Path(temp_dir) / 'ks.ks', distribution, 'rpm')
-                config_url = f"http://{get_host_ip()}:{http_port}/ks.ks"
-        
+                ks_filename = "ks.ks"
+
         # 启动HTTP服务器
         logger.info(f"启动HTTP服务器在端口{http_port}...")
-        http_server, http_thread = start_http_server(temp_dir, port=http_port)
+        http_server, http_thread, http_port = start_http_server(temp_dir, port=http_port)
         
         # 验证HTTP服务器可访问性
         host_ip = get_host_ip()
@@ -431,7 +432,8 @@ def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
             logger.info(f"  sudo ufw allow {http_port}/tcp               # ufw")
             logger.info(f"  sudo iptables -A INPUT -p tcp --dport {http_port} -j ACCEPT  # iptables")
             logger.info(f"或者尝试使用不同的端口: --http-port 参数")
-        
+
+        config_url = f"http://{get_host_ip()}:{http_port}/{ks_filename}"
         logger.info(f"配置文件URL: {config_url}")
         
         # 检测是否为DVD ISO
@@ -594,7 +596,7 @@ def main():
     parser.add_argument('-c', '--vcpus', type=int, default=2, help='CPU核心数（默认: 2）')
     parser.add_argument('-t', '--timeout', type=int, default=3600, help='安装超时时间秒（默认: 3600）')
     parser.add_argument('-n', '--vm-name', help='虚拟机名称（默认: 自动生成）')
-    parser.add_argument('--http-port', type=int, default=8080, help='HTTP服务器端口（默认: 8080）')
+    parser.add_argument('--http-port', type=int, default=0, help='HTTP服务器端口（默认: 0）')
     
     args = parser.parse_args()
     
