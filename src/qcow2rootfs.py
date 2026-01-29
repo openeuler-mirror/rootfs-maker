@@ -102,10 +102,12 @@ def extract_qcow2_with_guestfish(qcow2_path, tar_output):
         
     except pexpect.TIMEOUT:
         logger.error("错误: guestfish操作超时")
+        child.kill(9)
         child.close(force=True)
         return False
     except Exception as e:
         logger.error(f"错误: {e}")
+        child.kill(9)
         child.close(force=True)
         return False
 
@@ -184,7 +186,16 @@ def extract_kernel_and_rootfs(qcow2_path, output_dir, kernel_output=None):
     
     try:
         # 使用guestfish导出文件系统
-        if not extract_qcow2_with_guestfish(qcow2_path, temp_tar):
+        retry_times = 0
+        max_retries = 2
+        while retry_times <= max_retries:
+            if extract_qcow2_with_guestfish(qcow2_path, temp_tar):
+                logger.debug("guestfish导出成功")
+                break
+            retry_times += 1
+            logger.debug(f"第{retry_times}次进行guestfish导出重试")
+        if retry_times > max_retries:
+            logger.debug(f"guestfish导出重试{retry_times}次失败")
             raise RuntimeError("guestfish导出失败")
         
         # 解压tar文件到临时目录

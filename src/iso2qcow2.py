@@ -526,7 +526,7 @@ def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
                 success = rpm_auto_install_grub(vm_name, config_url)
             
             if not success:
-                logger.warning("警告: GRUB配置可能失败，但继续安装过程...")
+                raise RuntimeError(f"GRUB配置失败")
         
         # 等待安装完成或超时
         start_time = time.time()

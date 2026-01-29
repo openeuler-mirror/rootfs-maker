@@ -6,6 +6,7 @@ ISO转rootfs工具
 import sys
 import os
 import argparse
+import random
 import logging
 import logging.config
 from pathlib import Path
@@ -61,7 +62,8 @@ def iso2rootfs(iso_path, output_dir, preseed_file=None, ks_file=None,
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # 创建临时QCOW2文件
-    temp_qcow2 = output_dir / f"{iso_path.stem}_temp.qcow2"
+    temp_code = ''.join(random.choices('0123456789ABCDEF', k=6))
+    temp_qcow2 = output_dir / f"{iso_path.stem}_{temp_code}.qcow2"
     
     try:
         # 步骤1: ISO转QCOW2
@@ -118,7 +120,7 @@ def iso2rootfs(iso_path, output_dir, preseed_file=None, ks_file=None,
         return result
     
     except Exception as e:
-        # 发生错误时，根据keep_qcow2决定是否清理
+        logger.error(f"发生错误：{e}，根据keep_qcow2参数：{keep_qcow2}决定是否清理")
         if not keep_qcow2 and temp_qcow2.exists():
             try:
                 temp_qcow2.unlink()
@@ -169,34 +171,41 @@ def main():
 
     
     args = parser.parse_args()
-    
-    try:
-        iso2rootfs(
-            args.iso,
-            args.output,
-            preseed_file=args.preseed,
-            ks_file=args.kickstart,
-            disk_size=args.size,
-            memory=args.memory,
-            vcpus=args.vcpus,
-            timeout=args.timeout,
-            kernel_output=args.kernel,
-            create_cgz=not args.no_cgz,
-            keep_qcow2=args.keep_qcow2,
-            distribution=args.distribution,
-            http_port=args.http_port,
-            modules_output=args.modules,
-            repo=args.repo,
-            repo_extra=args.repo_extra
-        )
-    except KeyboardInterrupt:
-        logger.error(f"\n\n用户中断")
-        sys.exit(1)
-    except Exception as e:
-        logger.error(f"错误: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+
+    retry_times = 0
+    max_retry_times = 2
+    while retry_times <= max_retry_times:
+        try:
+            iso2rootfs(
+                args.iso,
+                args.output,
+                preseed_file=args.preseed,
+                ks_file=args.kickstart,
+                disk_size=args.size,
+                memory=args.memory,
+                vcpus=args.vcpus,
+                timeout=args.timeout,
+                kernel_output=args.kernel,
+                create_cgz=not args.no_cgz,
+                keep_qcow2=args.keep_qcow2,
+                distribution=args.distribution,
+                http_port=args.http_port,
+                modules_output=args.modules,
+                repo=args.repo,
+                repo_extra=args.repo_extra
+            )
+            break
+        except KeyboardInterrupt:
+            logger.error(f"\n\n用户中断")
+            sys.exit(1)
+        except Exception as e:
+            retry_times += 1
+            if retry_times > max_retry_times:
+                logger.warning(f"发生错误: {e}，已完成{retry_times}次重试，退出...")
+                import traceback
+                traceback.print_exc()
+                sys.exit(1)
+            logger.warning(f"发生错误: {e}，进行第{retry_times}次重试")
 
 
 if __name__ == "__main__":
