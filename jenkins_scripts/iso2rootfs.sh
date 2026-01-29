@@ -92,6 +92,15 @@ check_ssh_auth() {
 
 # ===================== 主流程 =====================
 echo "1. 安装依赖"
+wait_for_apt_lock() {
+    echo "检查 apt 锁状态..."
+    # 循环检测，直到锁可用
+    while fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do
+        echo "apt 锁被占用，等待 5 秒后重试..."
+        sleep 5
+    done
+}
+wait_for_apt_lock
 sudo apt-get update || error_exit "更新软件源失败"
 sudo apt-get install -y \
     git \
