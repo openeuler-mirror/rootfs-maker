@@ -1,0 +1,3 @@
+deb http://mirrors.huaweicloud.com/debian/ CODENAME main
+deb http://mirrors.huaweicloud.com/debian/ CODENAME-updates main
+deb http://mirrors.huaweicloud.com/debian-security/ CODENAME-security main

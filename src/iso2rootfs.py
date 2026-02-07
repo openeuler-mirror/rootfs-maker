@@ -30,7 +30,7 @@ def iso2rootfs(iso_path, output_dir, preseed_file=None, ks_file=None,
                disk_size='20G', memory=2048, vcpus=2, timeout=3600,
                kernel_output=None, create_cgz=True, keep_qcow2=False,
                distribution=None, http_port=0, modules_output=None,
-               repo=None, repo_extra=None):
+               repo=None, repo_extra=None, ks_extra=None):
     """
     将ISO转换为rootfs
     
@@ -51,7 +51,7 @@ def iso2rootfs(iso_path, output_dir, preseed_file=None, ks_file=None,
         modules_output: 内核模块输出文件路径（可选）
         repo: 仓库镜像配置模板名
         repo_extra: 仓库镜像配置模板中要替换的变量和对应的值
-
+        ks_extra: ks文件中需要替换的变量和对应的值
 
     """
     iso_path = Path(iso_path).resolve()
@@ -79,8 +79,9 @@ def iso2rootfs(iso_path, output_dir, preseed_file=None, ks_file=None,
             memory=memory,
             vcpus=vcpus,
             timeout=timeout,
+            http_port=http_port,
             distribution=distribution,
-            http_port=http_port
+            ks_extra=ks_extra
         )
         
         # 步骤2: QCOW2转rootfs
@@ -168,7 +169,7 @@ def main():
     parser.add_argument('--http-port', type=int, default=0, help='HTTP服务器端口（默认: 8080）')
     parser.add_argument('--repo', help='repo模板, 比如openeuler,bytedance')
     parser.add_argument('--repo-extra', help='repo源中要替换的变量,以键值对方式提供，多个键值对用逗号分隔')
-
+    parser.add_argument('--ks-extra', help='ks文件中要替换的变量,以键值对方式提供，多个键值对用逗号分隔')
     
     args = parser.parse_args()
 
@@ -192,7 +193,8 @@ def main():
                 http_port=args.http_port,
                 modules_output=args.modules,
                 repo=args.repo,
-                repo_extra=args.repo_extra
+                repo_extra=args.repo_extra,
+                ks_extra=args.ks_extra
             )
             break
         except KeyboardInterrupt:

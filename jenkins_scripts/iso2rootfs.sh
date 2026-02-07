@@ -47,6 +47,8 @@ ISO_FILE_SERVER=${ISO_FILE_SERVER-"http://os-cicd.byted.org/fileserver"}
 LOCAL_ROOTFS_DIR=${LOCAL_ROOTFS_DIR-"/data01/debian-arm64-rootfs"}
 
 HTTP_PORT=${HTTP_PORT-0}
+KS_EXTRA=${KS_EXTRA-'PASSWORD=root'}
+KEEP_QCOW2=${KEEP_QCOW2-'no'}
 # 根据需要配置的变量
 #REPO
 #REPO_EXTRA
@@ -158,6 +160,14 @@ if [ -n "$REPO_EXTRA" ]; then
         NEW_REPO_EXTRA="$REPO_EXTRA"
     fi
     python_args+=("--repo-extra" "$NEW_REPO_EXTRA")
+fi
+
+if [ -n "$KS_EXTRA" ]; then
+    python_args+=("--ks-extra" "$KS_EXTRA")
+fi
+
+if [ "${KEEP_QCOW2}" == "yes" ]; then
+   python_args+=("--keep-qcow2")
 fi
 
 echo "the extra args is ${python_args[@]}"

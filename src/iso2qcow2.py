@@ -233,10 +233,19 @@ def generate_from_template(output_path, distribution, iso_type):
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(template_content)
 
+def modify_ks_file(ks_file, ks_extra):
+    logger.debug(f"the modify ks file is {ks_file}")
+    logger.debug(f"the ks extra is {ks_extra}")
+    with open(ks_file, 'r', encoding='utf-8') as f:
+        file_content = f.read()
+    for key, value in ks_extra.items():
+        file_content = file_content.replace('${'+ key + '}', value)
+    with open(ks_file, 'w', encoding='utf-8') as f:
+        f.write(file_content)
 
 def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
-              disk_size='20G', memory=2048, vcpus=2, timeout=3600,
-              vm_name=None, distribution=None, http_port=0):
+              disk_size='20G', memory=2048, vcpus=2, timeout=3600, http_port=0,
+              vm_name=None, distribution=None, ks_extra=None):
     """
     将ISO转换为QCOW2镜像
     
@@ -252,6 +261,7 @@ def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
         vm_name: 虚拟机名称（如果为None则自动生成）
         distribution: 发行版名称 (debian, ubuntu, openeuler, centos, rhel, fedora)
         http_port: http服务端口
+        ks_extra: ks文件中替换的变量和值
     """
     iso_path = Path(iso_path).resolve()
     if not iso_path.exists():
@@ -406,13 +416,20 @@ def iso2qcow2(iso_path, output_qcow2, preseed_file=None, ks_file=None,
                 logger.info(f"使用提供的kickstart文件: {ks_file}")
             else:
                 # 如果没有指定发行版，尝试使用centos作为默认
+                ks_filename = "ks.ks"
                 if distribution is None:
                     distribution = 'centos'
-                    logger.info(f"未检测到发行版，使用默认模板: templates/{distribution}/ks.ks")
+                    logger.info(f"未检测到发行版，使用默认模板: templates/{distribution}/{ks_filename}")
                 else:
-                    logger.info(f"使用模板: templates/{distribution}/ks.ks")
-                generate_from_template(Path(temp_dir) / 'ks.ks', distribution, 'rpm')
-                ks_filename = "ks.ks"
+                    logger.info(f"使用模板: templates/{distribution}/{ks_filename}")
+                generate_from_template(Path(temp_dir) / ks_filename, distribution, 'rpm')
+
+        # 定制配置文件
+        if ks_extra:
+            ks_extra_dic = {}
+            for extra in ks_extra.split(","):
+                ks_extra_dic[extra.split("=")[0]] = extra.split("=")[1]
+            modify_ks_file(Path(temp_dir) / ks_filename, ks_extra_dic)
 
         # 启动HTTP服务器
         logger.info(f"启动HTTP服务器在端口{http_port}...")
