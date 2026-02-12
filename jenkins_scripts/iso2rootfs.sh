@@ -226,15 +226,15 @@ if [ -n "$PF_KEY" ];then
     source kinit.sh
     if ls "${LOCAL_ROOTFS_DIR}/${TIMESTAMP}"/*.qcow2;then
         echo "需要归档qcow2到文件服务器"
-        KRB5CCNAME="$krb5file" ssh tiger@$FILESERVER_IPv6 mkdir -p $FILESERVER_DIR/$BRANCH/$TIMESTAMP/qcow2/
-        KRB5CCNAME="$krb5file" scp -r ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/*.qcow2 tiger@[$FILESERVER_IPv6]:$FILESERVER_DIR/$BRANCH/$TIMESTAMP/qcow2/
+        sudo KRB5CCNAME="$krb5file" ssh tiger@$FILESERVER_IPv6 mkdir -p $FILESERVER_DIR/$BRANCH/$TIMESTAMP/qcow2/
+        sudo KRB5CCNAME="$krb5file" scp -r ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/*.qcow2 tiger@[$FILESERVER_IPv6]:$FILESERVER_DIR/$BRANCH/$TIMESTAMP/qcow2/
         rm -rf ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/*.qcow2
     fi
     echo "需要归档rootfs到文件服务器"
-        KRB5CCNAME="$krb5file" ssh tiger@$FILESERVER_IPv6 mkdir -p $FILESERVER_DIR/$BRANCH/$TIMESTAMP/rootfs/
-        KRB5CCNAME="$krb5file" scp -r ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/rootfs.cgz tiger@[$FILESERVER_IPv6]:$FILESERVER_DIR/$BRANCH/$TIMESTAMP/rootfs/
-        KRB5CCNAME="$krb5file" scp -r ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/modules-${TIMESTAMP}.cgz tiger@[$FILESERVER_IPv6]:$FILESERVER_DIR/$BRANCH/$TIMESTAMP/rootfs/
-        KRB5CCNAME="$krb5file" scp -r ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/vmlinuz-${TIMESTAMP} tiger@[$FILESERVER_IPv6]:$FILESERVER_DIR/$BRANCH/$TIMESTAMP/rootfs/
+    sudo KRB5CCNAME="$krb5file" ssh tiger@$FILESERVER_IPv6 mkdir -p $FILESERVER_DIR/$BRANCH/$TIMESTAMP/rootfs/
+    sudo KRB5CCNAME="$krb5file" scp -r ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/rootfs.cgz tiger@[$FILESERVER_IPv6]:$FILESERVER_DIR/$BRANCH/$TIMESTAMP/rootfs/
+    sudo KRB5CCNAME="$krb5file" scp -r ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/modules-${TIMESTAMP}.cgz tiger@[$FILESERVER_IPv6]:$FILESERVER_DIR/$BRANCH/$TIMESTAMP/rootfs/
+    sudo KRB5CCNAME="$krb5file" scp -r ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/vmlinuz-${TIMESTAMP} tiger@[$FILESERVER_IPv6]:$FILESERVER_DIR/$BRANCH/$TIMESTAMP/rootfs/
 else
     echo "无需归档qcow2和rootfs到文件服务器"
 fi
