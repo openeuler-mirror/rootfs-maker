@@ -198,10 +198,10 @@ for file in "${REQUIRED_FILES[@]}"; do
     fi
 done
 
-echo "5. 检查远程服务器SSH连接"
+echo "5. 检查到compass-ci服务器的SSH连接"
 check_ssh_auth
 
-echo "6. 归档产物到指定远程目录"
+echo "6. 归档产物到compass-ci服务器"
 # 创建远程目录
 ssh root@${TARGET_IP} "mkdir -p ${OS_BASE_DIR}/${TIMESTAMP}/boot/ ${INITRD_BASE_DIR}/${TIMESTAMP}/" || error_exit "创建远程目录失败"
 
@@ -220,7 +220,26 @@ ssh root@${TARGET_IP} "mv -f ${INITRD_BASE_DIR}/${TIMESTAMP}/rootfs.cgz ${INITRD
 # 复制ipconfig文件
 ssh root@${TARGET_IP} "cp -f /srv/ipconfig/run-ipconfig.cgz ${INITRD_BASE_DIR}/${TIMESTAMP}/" || error_exit "复制run-ipconfig.cgz失败"
 
-echo "7.job finished!"
+echo "7.检查是否要把qcow2和rootfs归档到文件服务器"
+if [ -n "$PF_KEY" ];then
+    krb5file="FILE:/tmp/krb5cc_tmppf"
+    source kinit.sh
+    if ls "${LOCAL_ROOTFS_DIR}/${TIMESTAMP}"/*.qcow2;then
+        echo "需要归档qcow2到文件服务器"
+        KRB5CCNAME="$krb5file" ssh tiger@$FILESERVER_IPv6 mkdir -p $FILESERVER_DIR/$BRANCH/$TIMESTAMP/qcow2/
+        KRB5CCNAME="$krb5file" scp -r ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/*.qcow2 tiger@[$FILESERVER_IPv6]:$FILESERVER_DIR/$BRANCH/$TIMESTAMP/qcow2/
+        rm -rf ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/*.qcow2
+    fi
+    echo "需要归档rootfs到文件服务器"
+        KRB5CCNAME="$krb5file" ssh tiger@$FILESERVER_IPv6 mkdir -p $FILESERVER_DIR/$BRANCH/$TIMESTAMP/rootfs/
+        KRB5CCNAME="$krb5file" scp -r ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/rootfs.cgz tiger@[$FILESERVER_IPv6]:$FILESERVER_DIR/$BRANCH/$TIMESTAMP/rootfs/
+        KRB5CCNAME="$krb5file" scp -r ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/modules-${TIMESTAMP}.cgz tiger@[$FILESERVER_IPv6]:$FILESERVER_DIR/$BRANCH/$TIMESTAMP/rootfs/
+        KRB5CCNAME="$krb5file" scp -r ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/vmlinuz-${TIMESTAMP} tiger@[$FILESERVER_IPv6]:$FILESERVER_DIR/$BRANCH/$TIMESTAMP/rootfs/
+else
+    echo "无需归档qcow2和rootfs到文件服务器"
+fi
+
+echo "8.job finished!"
 echo "the timestamp:${TIMESTAMP}"
 echo "the compass-ci Server:${TARGET_IP}"
 echo "rootfs dir:${OS_BASE_DIR}/${TIMESTAMP}"
