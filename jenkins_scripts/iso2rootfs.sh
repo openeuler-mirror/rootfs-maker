@@ -145,7 +145,7 @@ fi
 echo "4. 执行ISO转换rootfs操作"
 sudo rm -rf ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}
 sudo mkdir -p ${LOCAL_ROOTFS_DIR}/${TIMESTAMP} || error_exit "创建本地rootfs目录失败"
-cd $(pwd)/rootfs-maker || error_exit "进入$(pwd)/rootfs-maker目录失败"
+cd ${WORKSPACE}/rootfs-maker || error_exit "进入${WORKSPACE}/rootfs-maker目录失败"
 
 python_args=()
 if [ -n "$REPO" ]; then
@@ -223,7 +223,7 @@ ssh root@${TARGET_IP} "cp -f /srv/ipconfig/run-ipconfig.cgz ${INITRD_BASE_DIR}/$
 echo "7.检查是否要把qcow2和rootfs归档到文件服务器"
 if [ -n "$PF_KEY" ];then
     krb5file="FILE:/tmp/krb5cc_tmppf"
-    source kinit.sh
+    source jenkins_scripts/kinit.sh
     if ls "${LOCAL_ROOTFS_DIR}/${TIMESTAMP}"/*.qcow2;then
         echo "需要归档qcow2到文件服务器"
         sudo KRB5CCNAME="$krb5file" ssh tiger@$FILESERVER_IPv6 mkdir -p $FILESERVER_DIR/$BRANCH/$TIMESTAMP/qcow2/
