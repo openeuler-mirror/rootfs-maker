@@ -220,26 +220,7 @@ ssh root@${TARGET_IP} "mv -f ${INITRD_BASE_DIR}/${TIMESTAMP}/rootfs.cgz ${INITRD
 # 复制ipconfig文件
 ssh root@${TARGET_IP} "cp -f /srv/ipconfig/run-ipconfig.cgz ${INITRD_BASE_DIR}/${TIMESTAMP}/" || error_exit "复制run-ipconfig.cgz失败"
 
-echo "7.检查是否要把qcow2和rootfs归档到文件服务器"
-if [ -n "$PF_KEY" ];then
-    krb5file="FILE:/tmp/krb5cc_tmppf"
-    source jenkins_scripts/kinit.sh
-    if ls "${LOCAL_ROOTFS_DIR}/${TIMESTAMP}"/*.qcow2;then
-        echo "需要归档qcow2到文件服务器"
-        sudo KRB5CCNAME="$krb5file" ssh tiger@$FILESERVER_IPv6 mkdir -p $FILESERVER_DIR/$BRANCH/$TIMESTAMP/qcow2/
-        sudo KRB5CCNAME="$krb5file" scp -r ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/*.qcow2 tiger@[$FILESERVER_IPv6]:$FILESERVER_DIR/$BRANCH/$TIMESTAMP/qcow2/
-        rm -rf ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/*.qcow2
-    fi
-    echo "需要归档rootfs到文件服务器"
-    sudo KRB5CCNAME="$krb5file" ssh tiger@$FILESERVER_IPv6 mkdir -p $FILESERVER_DIR/$BRANCH/$TIMESTAMP/rootfs/
-    sudo KRB5CCNAME="$krb5file" scp -r ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/rootfs.cgz tiger@[$FILESERVER_IPv6]:$FILESERVER_DIR/$BRANCH/$TIMESTAMP/rootfs/
-    sudo KRB5CCNAME="$krb5file" scp -r ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/modules-${TIMESTAMP}.cgz tiger@[$FILESERVER_IPv6]:$FILESERVER_DIR/$BRANCH/$TIMESTAMP/rootfs/
-    sudo KRB5CCNAME="$krb5file" scp -r ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/vmlinuz-${TIMESTAMP} tiger@[$FILESERVER_IPv6]:$FILESERVER_DIR/$BRANCH/$TIMESTAMP/rootfs/
-else
-    echo "无需归档qcow2和rootfs到文件服务器"
-fi
-
-echo "8.job finished!"
+echo "7.job finished!"
 echo "the timestamp:${TIMESTAMP}"
 echo "the compass-ci Server:${TARGET_IP}"
 echo "rootfs dir:${OS_BASE_DIR}/${TIMESTAMP}"
