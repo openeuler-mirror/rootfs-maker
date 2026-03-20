@@ -36,7 +36,7 @@ TIMESTAMP=${TIMESTAMP-"202512111800"}
 # compass-ci服务器IP地址
 TARGET_IP=${TARGET_IP-"10.232.168.215"}
 # 架构
-ARCH=${ARCH-"arm64"}
+ARCH=${ARCH-"aarch64"}
 # ISO名称
 ISO_NAME=${ISO_NAME-"byted-debian-12.10.b1-arm64-DVD-1.iso"}
 # ISO本地目录
@@ -57,25 +57,17 @@ KEEP_QCOW2=${KEEP_QCOW2-'no'}
 # ===================== 配置项:禁止修改部分=====================
 
 if [ -f ${WORKSPACE}/config ];then
-  debversion=$(cat ${WORKSPACE}/config | grep DEBVERSION | awk -F '=' '{print $2}')
-  arch=$(cat ${WORKSPACE}/config | grep ARCHITECTURES | awk -F '=' '{print $2}')
-  ISO_NAME="byted-debian-${debversion}-${arch}-DVD-1.iso"
+    debversion=$(cat ${WORKSPACE}/config | grep DEBVERSION | awk -F '=' '{print $2}')
+    ARCH=$(cat ${WORKSPACE}/config | grep ARCHITECTURES | awk -F '=' '{print $2}')
+    ISO_NAME="byted-debian-${debversion}-${ARCH}-DVD-1.iso"
+    ISO_FILE_SERVER="${ISO_FILE_SERVER}/${BRANCH}/${TIMESTAMP}/iso/${ARCH}"
 fi
 
 ISO_DIR="${ISO_DIR}/${TIMESTAMP}"
-ISO_FILE_SERVER="${ISO_FILE_SERVER}/${BRANCH}/${TIMESTAMP}/iso/${ARCH}"
+
 # ISO本地目录
 ISO_FILE="${ISO_DIR}/${ISO_NAME}"
 
-if [ "${ARCH}" = "arm64" ];then
-# 远程服务器OS文件基础目录
-  OS_BASE_DIR="/srv/os/debian/aarch64"
-# 远程服务器initrd文件基础目录
-  INITRD_BASE_DIR="/srv/initrd/osimage/debian/aarch64"
-elif [ "${ARCH}" = "amd64" ];then
-  OS_BASE_DIR="/srv/os/debian/x86_64"
-  INITRD_BASE_DIR="/srv/initrd/osimage/debian/x86_64"
-fi
 # ===================== 函数定义 =====================
 
 # 错误处理函数
@@ -84,16 +76,8 @@ error_exit() {
     exit 1
 }
 
-# 检查SSH免密登录
-check_ssh_auth() {
-    echo "检查与 ${TARGET_IP} 的SSH免密登录..."
-    if ! ssh -o BatchMode=yes -o ConnectTimeout=5 root@${TARGET_IP} "echo ok" >/dev/null 2>&1; then
-        error_exit "未配置与 ${TARGET_IP} 的SSH免密登录，请先配置后再执行脚本！"
-    fi
-}
-
 # ===================== 主流程 =====================
-echo "1. 安装依赖"
+echo "安装依赖"
 wait_for_apt_lock() {
     echo "检查 apt 锁状态..."
     # 循环检测，直到锁可用
@@ -121,7 +105,7 @@ sudo apt-get install -y \
     virt-manager \
     python3-pexpect || error_exit "安装依赖失败"
 
-echo "2. 检查default网络"
+echo "检查default网络"
 # 启动default网络（如果已经启动则忽略错误，但继续执行）
 if ! virsh net-start default; then
     echo "警告：default网络启动失败（可能已经启动或不存在），继续执行..."
@@ -132,7 +116,7 @@ if ! virsh net-autostart default; then
     echo "警告：default网络自动启动设置失败（可能已经设置），继续执行..."
 fi
 
-echo "3. 检查ISO文件"
+echo "检查ISO文件"
 if [ ! -f "$ISO_FILE" ]; then
     echo "ISO文件不存在：$ISO_FILE，尝试先下载"
     mkdir -p ${ISO_DIR} && cd ${ISO_DIR}
@@ -142,7 +126,7 @@ if [ ! -f "$ISO_FILE" ]; then
     fi
 fi
 
-echo "4. 执行ISO转换rootfs操作"
+echo "执行ISO转换rootfs操作"
 sudo rm -rf ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}
 sudo mkdir -p ${LOCAL_ROOTFS_DIR}/${TIMESTAMP} || error_exit "创建本地rootfs目录失败"
 cd ${WORKSPACE}/rootfs-maker || error_exit "进入${WORKSPACE}/rootfs-maker目录失败"
@@ -197,30 +181,48 @@ for file in "${REQUIRED_FILES[@]}"; do
         error_exit "转换产物缺失：$file，请检查iso2rootfs.py执行日志！"
     fi
 done
+# 统一归档到${WORKSPACE}/rootfs下面，为后续流水线stash做准备
+mkdir -p ${WORKSPACE}/rootfs
+sudo cp ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/*.qcow2 ${WORKSPACE}/rootfs
+sudo cp ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/rootfs.cgz ${WORKSPACE}/rootfs
+sudo cp ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/modules-${TIMESTAMP}.cgz ${WORKSPACE}/rootfs
+sudo cp ${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/vmlinuz-${TIMESTAMP} ${WORKSPACE}/rootfs
 
-echo "5. 检查到compass-ci服务器的SSH连接"
-check_ssh_auth
+if [ -n "$NEED_STORE_TO_COMPASS_CI" ];then
+    echo "need to rsync rootfs to compass-ci scheduler...."
+    if [ "${ARCH}" == "arm64" ];then
+        ARCH="aarch64"
+    elif [ "${ARCH}" == "amd64" ];then
+        ARCH="x86_64"
+    fi
+  # 远程服务器OS文件基础目录
+    OS_BASE_DIR="/srv/os/debian/${ARCH}"
+ # 远程服务器initrd文件基础目录
+    INITRD_BASE_DIR="/srv/initrd/osimage/debian/${ARCH}"
 
-echo "6. 归档产物到compass-ci服务器"
-# 创建远程目录
-ssh root@${TARGET_IP} "mkdir -p ${OS_BASE_DIR}/${TIMESTAMP}/boot/ ${INITRD_BASE_DIR}/${TIMESTAMP}/" || error_exit "创建远程目录失败"
+    echo "检查到compass-ci服务器的SSH连接"
+    # 检查SSH免密登录
+    if ! ssh -o BatchMode=yes -o ConnectTimeout=5 root@${TARGET_IP} "echo ok" >/dev/null 2>&1; then
+      error_exit "未配置与 ${TARGET_IP} 的SSH免密登录，请先配置后再执行脚本！"
+    fi
 
-# 同步内核文件并创建软链接
-rsync -avz "${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/vmlinuz-${TIMESTAMP}" root@${TARGET_IP}:${OS_BASE_DIR}/${TIMESTAMP}/boot/ || error_exit "同步vmlinuz失败"
-ssh root@${TARGET_IP} "ln -sf ${OS_BASE_DIR}/${TIMESTAMP}/boot/vmlinuz-${TIMESTAMP} ${OS_BASE_DIR}/${TIMESTAMP}/boot/vmlinuz" || error_exit "创建vmlinuz软链接失败"
+    echo "归档产物到compass-ci服务器"
+    # 创建远程目录
+    ssh root@${TARGET_IP} "mkdir -p ${OS_BASE_DIR}/${TIMESTAMP}/boot/ ${INITRD_BASE_DIR}/${TIMESTAMP}/" || error_exit "创建远程目录失败"
 
-# 同步模块文件并创建软链接
-rsync -avz "${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/modules-${TIMESTAMP}.cgz" root@${TARGET_IP}:${OS_BASE_DIR}/${TIMESTAMP}/boot/ || error_exit "同步modules.cgz失败"
-ssh root@${TARGET_IP} "ln -sf ${OS_BASE_DIR}/${TIMESTAMP}/boot/modules-${TIMESTAMP}.cgz ${OS_BASE_DIR}/${TIMESTAMP}/boot/modules.cgz" || error_exit "创建modules.cgz软链接失败"
+    # 同步内核文件并创建软链接
+    rsync -avz "${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/vmlinuz-${TIMESTAMP}" root@${TARGET_IP}:${OS_BASE_DIR}/${TIMESTAMP}/boot/ || error_exit "同步vmlinuz失败"
+    ssh root@${TARGET_IP} "ln -sf ${OS_BASE_DIR}/${TIMESTAMP}/boot/vmlinuz-${TIMESTAMP} ${OS_BASE_DIR}/${TIMESTAMP}/boot/vmlinuz" || error_exit "创建vmlinuz软链接失败"
+    # 同步模块文件并创建软链接
+    rsync -avz "${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/modules-${TIMESTAMP}.cgz" root@${TARGET_IP}:${OS_BASE_DIR}/${TIMESTAMP}/boot/ || error_exit "同步modules.cgz失败"
+    ssh root@${TARGET_IP} "ln -sf ${OS_BASE_DIR}/${TIMESTAMP}/boot/modules-${TIMESTAMP}.cgz ${OS_BASE_DIR}/${TIMESTAMP}/boot/modules.cgz" || error_exit "创建modules.cgz软链接失败"
+    # 同步rootfs文件并改名
+    rsync -avz "${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/rootfs.cgz" root@${TARGET_IP}:${INITRD_BASE_DIR}/${TIMESTAMP}/ || error_exit "同步rootfs.cgz失败"
+    ssh root@${TARGET_IP} "mv -f ${INITRD_BASE_DIR}/${TIMESTAMP}/rootfs.cgz ${INITRD_BASE_DIR}/${TIMESTAMP}/current" || error_exit "重命名rootfs.cgz失败"
+    # 复制ipconfig文件
+    ssh root@${TARGET_IP} "cp -f /srv/ipconfig/run-ipconfig.cgz ${INITRD_BASE_DIR}/${TIMESTAMP}/" || error_exit "复制run-ipconfig.cgz失败"
+fi
 
-# 同步rootfs文件并改名
-rsync -avz "${LOCAL_ROOTFS_DIR}/${TIMESTAMP}/rootfs.cgz" root@${TARGET_IP}:${INITRD_BASE_DIR}/${TIMESTAMP}/ || error_exit "同步rootfs.cgz失败"
-ssh root@${TARGET_IP} "mv -f ${INITRD_BASE_DIR}/${TIMESTAMP}/rootfs.cgz ${INITRD_BASE_DIR}/${TIMESTAMP}/current" || error_exit "重命名rootfs.cgz失败"
-
-# 复制ipconfig文件
-ssh root@${TARGET_IP} "cp -f /srv/ipconfig/run-ipconfig.cgz ${INITRD_BASE_DIR}/${TIMESTAMP}/" || error_exit "复制run-ipconfig.cgz失败"
-
-echo "7.job finished!"
+echo "job finished!"
 echo "the timestamp:${TIMESTAMP}"
 echo "the compass-ci Server:${TARGET_IP}"
-echo "rootfs dir:${OS_BASE_DIR}/${TIMESTAMP}"
