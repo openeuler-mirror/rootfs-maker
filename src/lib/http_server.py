@@ -105,6 +105,7 @@ class ConfigHTTPServer:
         CustomHandler.directory = self.directory
         
         self.httpd = socketserver.TCPServer(("", self.port), CustomHandler)
+        self.port = self.httpd.server_address[1]
         
         def serve():
             self.httpd.serve_forever()
