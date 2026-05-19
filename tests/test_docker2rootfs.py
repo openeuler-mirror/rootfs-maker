@@ -1,8 +1,9 @@
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
-from docker2rootfs import find_kernel_in_rootfs
+from docker2rootfs import find_kernel_in_rootfs, main
 
 
 class TestFindKernelInRootfs:
@@ -84,3 +85,25 @@ class TestFindKernelInRootfs:
 
         kernels = find_kernel_in_rootfs(str(tmp_path))
         assert len(kernels) == 0
+
+
+class TestDocker2RootfsMain:
+    """测试 docker2rootfs main 入口"""
+
+    @patch("docker2rootfs.logger.error")
+    @patch("docker2rootfs.subprocess.run")
+    def test_main_logs_missing_docker_without_unsupported_file_kwarg(
+        self, mock_run, mock_error, monkeypatch
+    ):
+        """Docker 缺失时应直接记录错误并退出，而不是触发 logging TypeError"""
+        mock_run.side_effect = FileNotFoundError("docker not found")
+        monkeypatch.setattr(
+            "sys.argv",
+            ["docker2rootfs.py", "-i", "busybox:latest", "-o", "out"],
+        )
+
+        with pytest.raises(SystemExit) as exc:
+            main()
+
+        assert exc.value.code == 1
+        mock_error.assert_called_once_with("错误: Docker未安装或不可用")
