@@ -83,17 +83,18 @@ class TestConfigHTTPServer:
         """启动后 get_url 应返回正确的 URL"""
         mock_get_host_ip.return_value = "192.168.1.1"
         mock_httpd = MagicMock()
-        mock_httpd.server_address = ("", 0)
+        mock_httpd.server_address = ("", 4321)
         mock_tcpserver.return_value = mock_httpd
 
-        server = ConfigHTTPServer(tmp_path, port=9999)
+        server = ConfigHTTPServer(tmp_path, port=0)
         server.start()
 
         assert server.httpd is not None
         assert server.thread is not None
+        assert server.port == 4321
 
         url = server.get_url("preseed.cfg")
-        assert url == "http://192.168.1.1:9999/preseed.cfg"
+        assert url == "http://192.168.1.1:4321/preseed.cfg"
 
     @patch("lib.http_server.socketserver.TCPServer")
     def test_stop(self, mock_tcpserver, tmp_path):
