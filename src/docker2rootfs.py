@@ -274,7 +274,7 @@ def main():
             stderr=subprocess.PIPE
         )
     except (subprocess.CalledProcessError, FileNotFoundError):
-        logger.error("错误: Docker未安装或不可用", file=sys.stderr)
+        logger.error("错误: Docker未安装或不可用")
         sys.exit(1)
     
     try:
