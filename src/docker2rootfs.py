@@ -33,7 +33,6 @@ from lib.cgz_utils import compress_cgz
 if not logging.getLogger().hasHandlers():
     os.makedirs('logs', exist_ok=True)
     logger_config = os.path.join(str(Path(__file__).parent.parent), 'config', 'logger.conf')
-    print(f"logger_config: {logger_config}")
     logging.config.fileConfig(logger_config, encoding="utf-8")
 
 logger = logging.getLogger("common")
