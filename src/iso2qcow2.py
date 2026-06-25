@@ -35,7 +35,8 @@ from lib.deb_expect import auto_install_grub as deb_auto_install_grub
 from lib.rpm_expect import auto_install_grub as rpm_auto_install_grub
 
 if not logging.getLogger().hasHandlers():
-    os.makedirs('logs', exist_ok=True)
+    log_dir = Path(__file__).resolve().parent.parent / 'logs'
+    log_dir.mkdir(parents=True, exist_ok=True)
     logger_config = os.path.join(str(Path(__file__).parent.parent), 'config','logger.conf')
     logging.config.fileConfig(logger_config, encoding="utf-8")
 
