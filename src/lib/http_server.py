@@ -23,6 +23,7 @@ import threading
 import time
 import socket
 import logging
+from urllib.parse import quote
 
 logger = logging.getLogger("common")
 
@@ -145,7 +146,8 @@ class ConfigHTTPServer:
         Returns:
             完整的HTTP URL
         """
-        return f"http://{get_host_ip()}:{self.port}/{filename}"
+        safe_name = quote(str(filename), safe="/")
+        return f"http://{get_host_ip()}:{self.port}/{safe_name}"
 
 
 def start_http_server(directory, port=0):
@@ -218,7 +220,8 @@ def check_http_server_accessible(ip, port, filename, timeout=10):
     import urllib.request
     import urllib.error
     
-    url = f"http://{ip}:{port}/{filename}"
+    safe_name = quote(str(filename), safe="/")
+    url = f"http://{ip}:{port}/{safe_name}"
     
     try:
         response = urllib.request.urlopen(url, timeout=timeout)

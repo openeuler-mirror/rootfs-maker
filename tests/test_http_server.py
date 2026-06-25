@@ -97,6 +97,21 @@ class TestConfigHTTPServer:
         assert url == "http://192.168.1.1:4321/preseed.cfg"
 
     @patch("lib.http_server.socketserver.TCPServer")
+    @patch("lib.http_server.get_host_ip")
+    def test_start_and_get_url_with_special_chars(self, mock_get_host_ip, mock_tcpserver, tmp_path):
+        """文件名包含空格时应正确进行 URL 编码"""
+        mock_get_host_ip.return_value = "192.168.1.1"
+        mock_httpd = MagicMock()
+        mock_httpd.server_address = ("", 0)
+        mock_tcpserver.return_value = mock_httpd
+
+        server = ConfigHTTPServer(tmp_path, port=9999)
+        server.start()
+
+        url = server.get_url("dir name/preseed file.cfg")
+        assert url == "http://192.168.1.1:9999/dir%20name/preseed%20file.cfg"
+
+    @patch("lib.http_server.socketserver.TCPServer")
     def test_stop(self, mock_tcpserver, tmp_path):
         """stop 方法应调用 shutdown 和 server_close"""
         mock_httpd = MagicMock()
@@ -145,6 +160,18 @@ class TestCheckHttpServerAccessible:
 
         result = check_http_server_accessible("192.168.1.1", 8080, "preseed.cfg")
         assert result is True
+
+    @patch("urllib.request.urlopen")
+    def test_accessible_encodes_filename(self, mock_urlopen):
+        """带空格的文件名应使用编码后的 URL 访问"""
+        mock_response = MagicMock()
+        mock_response.getcode.return_value = 200
+        mock_urlopen.return_value = mock_response
+
+        result = check_http_server_accessible("192.168.1.1", 8080, "dir name/preseed file.cfg")
+        assert result is True
+        mock_urlopen.assert_called_once()
+        assert "%20" in mock_urlopen.call_args.args[0]
 
     @patch("urllib.request.urlopen")
     def test_not_accessible(self, mock_urlopen):
