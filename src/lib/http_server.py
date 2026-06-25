@@ -73,11 +73,9 @@ def get_host_ip():
             pass
         
         # 方法2: 创建一个UDP socket来获取默认路由接口的IP
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
     except Exception:
         # 回退方案
         return "192.168.122.1"  # libvirt默认网络网关

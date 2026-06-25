@@ -41,7 +41,7 @@ class TestGetHostIp:
 
         mock_sock = MagicMock()
         mock_sock.getsockname.return_value = ("10.0.0.5", 0)
-        mock_socket.return_value = mock_sock
+        mock_socket.return_value.__enter__.return_value = mock_sock
 
         ip = get_host_ip()
         assert ip == "10.0.0.5"
@@ -55,7 +55,7 @@ class TestGetHostIp:
 
         mock_sock = MagicMock()
         mock_sock.connect.side_effect = Exception("no network")
-        mock_socket.return_value = mock_sock
+        mock_socket.return_value.__enter__.return_value = mock_sock
 
         ip = get_host_ip()
         assert ip == "192.168.122.1"
