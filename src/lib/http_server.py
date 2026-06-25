@@ -26,6 +26,20 @@ import logging
 
 logger = logging.getLogger("common")
 
+
+def _safe_translate_path(base_dir, path):
+    """Map request paths into the served directory without allowing escapes."""
+    import os
+
+    request_path = path.split('?', 1)[0]
+    request_path = request_path.split('#', 1)[0]
+    request_path = request_path.lstrip('/')
+    joined = os.path.abspath(os.path.join(base_dir, request_path))
+    base_abs = os.path.abspath(base_dir)
+    if os.path.commonpath([base_abs, joined]) != base_abs:
+        return base_abs
+    return joined
+
 def get_host_ip():
     """获取主机IP地址，用于HTTP服务器"""
     try:
@@ -100,7 +114,7 @@ class ConfigHTTPServer:
                 # 移除前导斜杠
                 path = path.lstrip('/')
                 # 构建完整路径
-                return os.path.join(self.directory, path)
+                return _safe_translate_path(self.directory, path)
         
         CustomHandler.directory = self.directory
         
@@ -156,7 +170,7 @@ def start_http_server(directory, port=0):
             # 移除前导斜杠
             path = path.lstrip('/')
             # 构建完整路径
-            return os.path.join(directory, path)
+            return _safe_translate_path(directory, path)
     
     httpd = socketserver.TCPServer(("", port), CustomHandler)
     actual_port = httpd.server_address[1]

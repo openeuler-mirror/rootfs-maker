@@ -164,6 +164,17 @@ class TestCheckHttpServerAccessible:
         result = check_http_server_accessible("192.168.1.1", 8080, "preseed.cfg")
         assert result is False
 
+    @patch("urllib.request.urlopen")
+    def test_path_traversal_is_neutralized(self, mock_urlopen):
+        """路径穿越请求应被限制在服务目录内"""
+        mock_response = MagicMock()
+        mock_response.getcode.return_value = 200
+        mock_urlopen.return_value = mock_response
+
+        result = check_http_server_accessible("192.168.1.1", 8080, "../secret.cfg")
+        assert result is True
+        assert ".." not in mock_urlopen.call_args.args[0]
+
 
 class TestCheckFirewallStatus:
     """测试 check_firewall_status 函数"""
